@@ -1,0 +1,8 @@
+{
+  "name": "Pyatnashki.EditorTests",
+  "rootNamespace": "Pyatnashki.Tests",
+  "references": ["Pyatnashki.Domain"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
