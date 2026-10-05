@@ -42,9 +42,9 @@ namespace Pyatnashki
         private Text resultTitle, resultDetails, resultStars, timeText, goalText;
         private bool RoundEnded => !diagnosticRound &&
             (round.State == SiegeRoundState.Won || round.State == SiegeRoundState.Lost);
-        private static readonly Color Ink = new Color(0.91f, 0.94f, 0.96f);
-        private static readonly Color Muted = new Color(0.60f, 0.68f, 0.73f);
-        private static readonly Color Gold = new Color(0.97f, 0.73f, 0.31f);
+        private static readonly Color Ink = PrototypeArt.Parchment;
+        private static readonly Color Muted = PrototypeArt.Muted;
+        private static readonly Color Gold = PrototypeArt.Gold;
         private readonly SlidingBoard board = new SlidingBoard();
         private readonly TileOccupancy occupancy = new TileOccupancy();
         private readonly List<WarriorView> warriors = new List<WarriorView>();
@@ -59,6 +59,8 @@ namespace Pyatnashki
         private readonly RectTransform[] tiles = new RectTransform[SlidingBoard.CellCount];
         private readonly Button[] buttons = new Button[SlidingBoard.CellCount];
         private readonly Image[] images = new Image[SlidingBoard.CellCount];
+        private readonly Outline[] tileBorders = new Outline[SlidingBoard.CellCount];
+        private readonly Text[] tileSigns = new Text[SlidingBoard.CellCount];
         private readonly List<Image>[] roads = new List<Image>[RoadLayout.FinalTile + 1];
         private readonly List<RoadLink> roadLinks = new List<RoadLink>();
         private sealed class RoadLink
@@ -168,7 +170,7 @@ namespace Pyatnashki
                 caption.fontSize = 19;
                 caption.color = available ? Ink : Muted;
                 levelButtons[i].targetGraphic.color = available
-                    ? new Color(0.22f, 0.32f, 0.39f) : new Color(0.10f, 0.15f, 0.19f);
+                    ? PrototypeArt.Wood : new Color(0.14f, 0.17f, 0.12f);
             }
             levelMenu.SetActive(true);
             levelMenu.transform.SetAsLastSibling();
@@ -221,14 +223,14 @@ namespace Pyatnashki
         private void BuildLevelMenu()
         {
             var overlay = Panel("Level Selection", contentRect, Vector2.zero, new Vector2(700, 1400),
-                new Color(0.025f, 0.045f, 0.065f, 0.98f));
+                new Color(0.07f, 0.10f, 0.075f, 0.98f));
             overlay.raycastTarget = true;
             levelMenu = overlay.gameObject;
             Label("Heading", overlay.rectTransform, new Vector2(0, 580), new Vector2(640, 60),
                 "ОБЕРИ РІВЕНЬ", 32, Gold, FontStyle.Bold);
             // Scrollable viewport supports campaigns longer than the initial six levels.
             var viewport = Panel("Level Viewport", overlay.rectTransform, new Vector2(0, 105),
-                new Vector2(650, 820), new Color(0.04f, 0.07f, 0.10f));
+                new Vector2(650, 820), PrototypeArt.Dark);
             viewport.raycastTarget = true;
             viewport.gameObject.AddComponent<RectMask2D>();
             var list = MakeRect("Level List", viewport.rectTransform, Vector2.zero,
@@ -265,7 +267,7 @@ namespace Pyatnashki
         private void BuildResultOverlay()
         {
             var overlay = Panel("Round Result", contentRect, Vector2.zero, new Vector2(700, 1400),
-                new Color(0.025f, 0.045f, 0.065f, 0.96f));
+                new Color(0.07f, 0.10f, 0.075f, 0.97f));
             overlay.raycastTarget = true;
             resultOverlay = overlay.gameObject;
             resultTitle = Label("Result Title", overlay.rectTransform, new Vector2(0, 245),
@@ -326,7 +328,7 @@ namespace Pyatnashki
             scaler.matchWidthOrHeight = 0.5f;
             canvasRect = obj.GetComponent<RectTransform>();
             var background = Panel("Background", canvasRect, Vector2.zero, Vector2.zero,
-                new Color(0.055f, 0.09f, 0.13f));
+                new Color(0.075f, 0.11f, 0.08f));
             background.rectTransform.anchorMin = Vector2.zero;
             background.rectTransform.anchorMax = Vector2.one;
             background.rectTransform.offsetMin = background.rectTransform.offsetMax = Vector2.zero;
@@ -337,17 +339,18 @@ namespace Pyatnashki
             levelsButton = MakeButton("Levels", contentRect, new Vector2(270, 650),
                 new Vector2(140, 50), "Рівні", ShowLevels);
             Label("Instructions", contentRect, new Vector2(0, 590), new Vector2(660, 55),
-                "Свайпай плитку до вільної клітинки або торкнися її", 20, Muted);
+                "Свайп до прогалини або торкання\nЗолота рамка — хід · ✓ — правильна позиція", 18, Muted);
 
             boardRect = MakeRect("Board", contentRect, new Vector2(0, -70), new Vector2(592, 592));
+            PrototypeArt.Board(boardRect);
             Panel("Board Frame", boardRect, Vector2.zero, new Vector2(592, 592),
-                new Color(0.11f, 0.16f, 0.20f));
+                new Color(0.13f, 0.18f, 0.12f));
             for (int i = 0; i < SlidingBoard.CellCount; i++)
                 Panel("Cell " + i, boardRect, CellPosition(i), new Vector2(132, 132),
-                    new Color(0.075f, 0.12f, 0.16f));
+                    new Color(0.10f, 0.14f, 0.09f));
             BuildRoadLinks();
             emptyMarker = Label("Empty Cell", boardRect, Vector2.zero, new Vector2(130, 70),
-                "ВІЛЬНО", 17, Muted).rectTransform;
+                "ПРОГАЛИНА", 16, Muted).rectTransform;
             for (int tile = 1; tile < SlidingBoard.CellCount; tile++)
             {
                 int number = tile;
@@ -360,23 +363,37 @@ namespace Pyatnashki
                 buttons[tile] = button;
                 tiles[tile] = button.GetComponent<RectTransform>();
                 images[tile] = button.GetComponent<Image>();
+                tileBorders[tile] = button.GetComponent<Outline>();
+                PrototypeArt.Terrain(tile, tiles[tile]);
                 BuildRoad(tile, tiles[tile]);
-                Label("Number", tiles[tile], new Vector2(-43, 43), new Vector2(42, 34),
-                    tile.ToString(), 28, new Color(0.08f, 0.12f, 0.15f), FontStyle.Bold);
-                capacityTexts[tile] = Label("Capacity", tiles[tile], new Vector2(-40, -46), new Vector2(56, 24),
-                    "0/" + tile, 15, new Color(0.12f, 0.20f, 0.23f));
-                reservationTexts[tile] = Label("Reserved", tiles[tile], new Vector2(42, -46),
-                    new Vector2(40, 24), "", 14, new Color(0.12f, 0.20f, 0.23f));
+                PrototypeArt.Badge(tiles[tile], new Vector2(-43, 48), new Vector2(38, 28));
+                PrototypeArt.Badge(tiles[tile], new Vector2(-42, -49), new Vector2(46, 22));
+                PrototypeArt.Badge(tiles[tile], new Vector2(46, -49), new Vector2(26, 22));
+                tileSigns[tile] = Label("Position Sign", tiles[tile], new Vector2(47, 48),
+                    new Vector2(25, 25), "", 20, Gold, FontStyle.Bold);
+                Label("Number", tiles[tile], new Vector2(-43, 48), new Vector2(38, 28),
+                    tile.ToString(), 24, Ink, FontStyle.Bold);
+                capacityTexts[tile] = Label("Capacity", tiles[tile], new Vector2(-42, -49), new Vector2(46, 22),
+                    "0/" + tile, 14, Ink);
+                reservationTexts[tile] = Label("Reserved", tiles[tile], new Vector2(46, -49),
+                    new Vector2(26, 22), "", 12, Gold);
             }
-            var final = Panel("Final Tile", boardRect, CellPosition(15), new Vector2(132, 132), Gold);
+            var final = Panel("Final Tile", boardRect, CellPosition(15), new Vector2(132, 132), PrototypeArt.TerrainColor(16));
+            PrototypeArt.Border(final, Gold, 3);
+            PrototypeArt.Terrain(16, final.rectTransform);
             finalTile = final.gameObject;
             BuildRoad(RoadLayout.FinalTile, final.rectTransform);
-            Label("Final Label", final.rectTransform, new Vector2(0, 38), new Vector2(125, 30),
-                "ФІНІШ", 18, new Color(0.10f, 0.14f, 0.16f), FontStyle.Bold);
-            capacityTexts[16] = Label("Final Capacity", final.rectTransform, new Vector2(-40, -46),
-                new Vector2(56, 24), "0/16", 15, new Color(0.12f, 0.20f, 0.23f));
-            reservationTexts[16] = Label("Final Reserved", final.rectTransform, new Vector2(42, -46),
-                new Vector2(40, 24), "", 14, new Color(0.12f, 0.20f, 0.23f));
+            PrototypeArt.Badge(final.rectTransform, new Vector2(-43, 48), new Vector2(38, 28));
+            PrototypeArt.Badge(final.rectTransform, new Vector2(-42, -49), new Vector2(46, 22));
+            PrototypeArt.Badge(final.rectTransform, new Vector2(46, -49), new Vector2(26, 22));
+            Label("Final Label", final.rectTransform, new Vector2(-43, 48), new Vector2(38, 28),
+                "16", 24, Gold, FontStyle.Bold);
+            Label("Bridge Sign", final.rectTransform, new Vector2(47, 48), new Vector2(25, 25),
+                "✦", 20, Gold, FontStyle.Bold);
+            capacityTexts[16] = Label("Final Capacity", final.rectTransform, new Vector2(-42, -49),
+                new Vector2(46, 22), "0/16", 14, Ink);
+            reservationTexts[16] = Label("Final Reserved", final.rectTransform, new Vector2(46, -49),
+                new Vector2(26, 22), "", 12, Gold);
             finalTile.SetActive(false);
             entryArrow = Label("Entry Arrow", contentRect, new Vector2(216, -400), new Vector2(44, 44),
                 "↑", 36, Gold, FontStyle.Bold);
@@ -402,23 +419,21 @@ namespace Pyatnashki
 
         private void BuildSidePanels()
         {
-            Color panel = new Color(0.09f, 0.14f, 0.18f);
+            Color panel = new Color(0.15f, 0.20f, 0.14f);
             var army = Panel("Army Panel", contentRect, new Vector2(-170, 480), new Vector2(320, 160), panel);
+            PrototypeArt.Card(army);
             Label("Army Title", army.rectTransform, new Vector2(0, 60), new Vector2(290, 28),
                 "ВІЙСЬКО", 22, Ink, FontStyle.Bold);
             warriorText = Label("Warrior State", army.rectTransform, Vector2.zero, new Vector2(300, 94), "", 17, Ink);
             var progress = Panel("Progress Panel", contentRect, new Vector2(170, 480), new Vector2(320, 160), panel);
+            PrototypeArt.Card(progress);
             Label("Progress Title", progress.rectTransform, new Vector2(0, 60), new Vector2(290, 28),
                 "РАУНД", 22, Ink, FontStyle.Bold);
             timeText = Label("Time", progress.rectTransform, new Vector2(0, 22), new Vector2(290, 30), "", 23, Gold);
             movesText = Label("Moves", progress.rectTransform, new Vector2(0, -12), new Vector2(290, 28), "", 20, Gold);
             correctText = Label("Correct Tiles", progress.rectTransform, new Vector2(0, -45), new Vector2(290, 40), "", 17, Ink);
             Label("Castle Title", contentRect, new Vector2(-72, 380), new Vector2(200, 30), "ЗАМОК", 22, Ink, FontStyle.Bold);
-            Color stone = new Color(0.35f, 0.45f, 0.51f);
-            Panel("Castle Body", contentRect, new Vector2(-72, 300), new Vector2(100, 60), stone);
-            Panel("Left Tower", contentRect, new Vector2(-132, 315), new Vector2(26, 80), stone);
-            Panel("Right Tower", contentRect, new Vector2(-12, 315), new Vector2(26, 80), stone);
-            Panel("Gate", contentRect, new Vector2(-72, 280), new Vector2(22, 28), panel);
+            PrototypeArt.Castle(contentRect);
             castleArrow = Label("Castle Arrow", contentRect, new Vector2(-72, 250), new Vector2(44, 44), "↑", 36, Gold);
             routeText = Label("Route", contentRect, new Vector2(190, 310), new Vector2(260, 70), "", 19, Ink);
             goalText = Label("Goal", contentRect, new Vector2(-115, -425), new Vector2(390, 72), "", 20, Muted);
@@ -514,8 +529,14 @@ namespace Pyatnashki
             {
                 bool movable = !busy && !RoundEnded && !board.IsSolved && board.CanMoveTile(tile);
                 buttons[tile].interactable = movable;
-                images[tile].color = movable ? Gold : board.GetIndexOf(tile) == tile - 1
-                    ? new Color(0.45f, 0.72f, 0.61f) : new Color(0.70f, 0.76f, 0.78f);
+                bool correct = board.GetIndexOf(tile) == tile - 1;
+                images[tile].color = PrototypeArt.TerrainColor(tile);
+                tileBorders[tile].effectColor = movable ? Gold : correct
+                    ? new Color(0.55f, 0.78f, 0.42f) : new Color(0.25f, 0.30f, 0.18f);
+                tileBorders[tile].effectDistance = movable ? new Vector2(3, -3) : new Vector2(1, -1);
+                int delta = board.EmptyIndex - board.GetIndexOf(tile);
+                tileSigns[tile].text = correct ? "✓" : movable ? (Mathf.Abs(delta) == 1 ? "↔" : "↕") : "";
+                tileSigns[tile].color = movable ? Gold : new Color(0.66f, 0.86f, 0.50f);
             }
             if (updateRoads) RefreshRoads();
             RefreshWarriorInterface();
@@ -576,7 +597,8 @@ namespace Pyatnashki
             {
                 var marker = Panel("Warrior " + (i + 1), boardRect, WarriorQueuePosition,
                     new Vector2(18, 18), Defense ? new Color(0.12f, 0.55f, 0.88f) : new Color(0.88f, 0.12f + i * 0.012f, 0.18f)).rectTransform;
-                Label("Identity", marker, Vector2.zero, new Vector2(18, 18), (i + 1).ToString(), 11,
+                PrototypeArt.Warrior(marker.GetComponent<Image>(), Defense);
+                Label("Identity", marker, new Vector2(0, -1), new Vector2(12, 10), (i + 1).ToString(), 8,
                     Color.white, FontStyle.Bold);
                 var w = new WarriorView { Id = i, Model = new WarriorSimulation(occupancy, Defense),
                     Marker = marker, Cooldown = 0.25f };
@@ -757,19 +779,27 @@ namespace Pyatnashki
         private void BuildRoad(int tile, RectTransform parent)
         {
             roads[tile] = new List<Image>();
-            Color dark = new Color(0.15f, 0.24f, 0.28f);
-            roads[tile].Add(Panel("Road Centre", parent, Vector2.zero, new Vector2(16, 16), dark));
             RoadPorts ports = RoadLayout.GetPorts(tile);
-            foreach (RoadPorts direction in new[] { RoadPorts.North, RoadPorts.East,
-                RoadPorts.South, RoadPorts.West })
+            // Draw every road bed first, then every surface, so junctions have no dark seams.
+            for (int pass = 0; pass < 2; pass++)
             {
-                if ((ports & direction) == 0) continue;
-                bool vertical = direction == RoadPorts.North || direction == RoadPorts.South;
-                Vector2 position = direction == RoadPorts.North ? new Vector2(0, 33)
-                    : direction == RoadPorts.South ? new Vector2(0, -33)
-                    : direction == RoadPorts.East ? new Vector2(33, 0) : new Vector2(-33, 0);
-                roads[tile].Add(Panel("Road " + direction, parent, position,
-                    vertical ? new Vector2(16, 66) : new Vector2(66, 16), dark));
+                float width = pass == 0 ? 26 : 22;
+                Color color = pass == 0 ? new Color(0.25f, 0.28f, 0.16f) : PrototypeArt.Road;
+                var centre = Panel(pass == 0 ? "Road Bed" : "Road Centre", parent,
+                    Vector2.zero, new Vector2(width, width), color);
+                if (pass == 1) roads[tile].Add(centre);
+                foreach (RoadPorts direction in new[] { RoadPorts.North, RoadPorts.East,
+                    RoadPorts.South, RoadPorts.West })
+                {
+                    if ((ports & direction) == 0) continue;
+                    bool vertical = direction == RoadPorts.North || direction == RoadPorts.South;
+                    Vector2 position = direction == RoadPorts.North ? new Vector2(0, 33)
+                        : direction == RoadPorts.South ? new Vector2(0, -33)
+                        : direction == RoadPorts.East ? new Vector2(33, 0) : new Vector2(-33, 0);
+                    var road = Panel((pass == 0 ? "Road Bed " : "Road ") + direction, parent,
+                        position, vertical ? new Vector2(width, 66) : new Vector2(66, width), color);
+                    if (pass == 1) roads[tile].Add(road);
+                }
             }
         }
 
@@ -781,8 +811,8 @@ namespace Pyatnashki
                     if (!RoadNetwork.TryGetNeighbor(cell, direction, out int next)) continue;
                     Vector2 midpoint = (CellPosition(cell) + CellPosition(next)) * 0.5f;
                     var image = Panel("Connection " + cell + " to " + next, boardRect,
-                        midpoint, direction == RoadPorts.East ? new Vector2(12, 16)
-                            : new Vector2(16, 12), Color.white);
+                        midpoint, direction == RoadPorts.East ? new Vector2(12, 22)
+                            : new Vector2(22, 12), Color.white);
                     image.gameObject.SetActive(false);
                     roadLinks.Add(new RoadLink { Cell = cell, Next = next,
                         Direction = direction, Image = image });
@@ -798,8 +828,8 @@ namespace Pyatnashki
         private void RefreshRoads()
         {
             RoadNetworkResult route = RoadNetwork.Analyze(board, finalTile.activeSelf, Defense);
-            Color connected = new Color(0.04f, 0.48f, 0.51f);
-            Color disconnected = new Color(0.15f, 0.24f, 0.28f);
+            Color connected = PrototypeArt.OpenRoad;
+            Color disconnected = PrototypeArt.Road;
             for (int tile = 1; tile <= RoadLayout.FinalTile; tile++)
             {
                 int cell = tile == RoadLayout.FinalTile ? board.EmptyIndex : board.GetIndexOf(tile);
@@ -816,7 +846,7 @@ namespace Pyatnashki
             routeText.text = "Доступні плитки: " + route.ReachableTileCount + " / 16\n"
                 + (route.HasCastleRoute ? (Defense ? "Шлях до рубежу відкрито" : "Шлях до замку відкрито")
                     : (Defense ? "Шлях до рубежу розірвано" : "Шлях до замку розірвано"));
-            routeText.color = route.HasCastleRoute ? new Color(0.35f, 0.87f, 0.77f) : Ink;
+            routeText.color = route.HasCastleRoute ? new Color(0.72f, 0.88f, 0.49f) : Ink;
         }
 
         private void FitSafeArea()
@@ -871,8 +901,9 @@ namespace Pyatnashki
         private Button MakeButton(string name, Transform parent, Vector2 position, Vector2 size,
             string caption, UnityEngine.Events.UnityAction action)
         {
-            var image = Panel(name, parent, position, size, new Color(0.22f, 0.32f, 0.39f));
+            var image = Panel(name, parent, position, size, PrototypeArt.Wood);
             image.raycastTarget = true;
+            PrototypeArt.Border(image, new Color(0.54f, 0.43f, 0.24f), 2);
             var button = image.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
             var navigation = button.navigation;
@@ -881,7 +912,7 @@ namespace Pyatnashki
             var colors = button.colors;
             colors.normalColor = colors.disabledColor = Color.white;
             colors.highlightedColor = new Color(1f, 0.95f, 0.83f);
-            colors.pressedColor = new Color(0.80f, 0.85f, 0.87f);
+            colors.pressedColor = new Color(0.78f, 0.72f, 0.57f);
             button.colors = colors;
             button.onClick.AddListener(action);
             if (!string.IsNullOrEmpty(caption))
