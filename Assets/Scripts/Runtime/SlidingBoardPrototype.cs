@@ -19,6 +19,12 @@ namespace Pyatnashki
         private readonly List<LevelDefinition> campaign = new List<LevelDefinition>();
         private int levelIndex;
         private CampaignProgress progress;
+        private KingdomEconomy economy;
+        private KingdomView kingdomView;
+        private RectTransform capitalCastle;
+        private float economyClock, economySaveClock;
+        private const string EconomyKey = "Pyatnashki.Kingdom.v1";
+        private static long UtcSeconds() => System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         private bool practiceRound;
         private const string LegacyProgressKey = "Pyatnashki.Campaign.Unlocked.v1";
         private const string StarsVersionKey = "Pyatnashki.Campaign.Stars.v2";
@@ -30,7 +36,7 @@ namespace Pyatnashki
         private Button nextLevelButton, levelsButton;
         private LevelDefinition CurrentLevel => campaign[levelIndex];
         private bool Defense => !diagnosticRound && round.Mode == LevelMode.Defense;
-        private bool MenuOpen => levelMenu != null && levelMenu.activeSelf;
+        private bool MenuOpen => (levelMenu != null && levelMenu.activeSelf) || (kingdomView != null && kingdomView.IsOpen);
         private int SourceCell => Defense ? RoadLayout.CastleCell : RoadLayout.EntryCell;
         private int DestinationCell => Defense ? RoadLayout.EntryCell : RoadLayout.CastleCell;
         private Vector2 SourceOutside => Defense ? new Vector2(0, 144) : new Vector2(0, -144);
@@ -116,6 +122,7 @@ namespace Pyatnashki
                 return;
             }
             LoadProgress();
+            LoadEconomy();
             BuildInterface();
             StartLevel(0);
             ShowLevels();
@@ -123,6 +130,10 @@ namespace Pyatnashki
 
         private void Update()
         {
+            economyClock += Time.unscaledDeltaTime;
+            economySaveClock += Time.unscaledDeltaTime;
+            if (economyClock >= 1) { economyClock = 0; economy.Advance(UtcSeconds()); }
+            if (economySaveClock >= 60) { economySaveClock = 0; SaveEconomy(); }
             if (RoundEnded || MenuOpen) return;
             if (!diagnosticRound)
             {
@@ -153,6 +164,7 @@ namespace Pyatnashki
             levelIndex = index;
             practiceRound = practice;
             levelMenu.SetActive(false);
+            kingdomView.Hide();
             StartRound(practice ? 1 : CurrentLevel.ScrambleMoves);
         }
 
@@ -182,6 +194,85 @@ namespace Pyatnashki
             levelMenu.SetActive(false);
         }
 
+        private SettlementDefinition[] SettlementDefinitions()
+        {
+            var result = new List<SettlementDefinition>();
+            foreach (LevelDefinition level in campaign)
+            {
+                int index = campaign.IndexOf(level);
+                if (level.Mode != LevelMode.Capture) continue;
+                int number = result.Count;
+                SettlementKind kind = (SettlementKind)(number % 3);
+                string[] names = { "Лісове село", "Торгове місто", "Прикордонна фортеця" };
+                string name = names[number % 3] + (number >= 3 ? " " + (number + 1) : "");
+                int defense = index + 1 < campaign.Count && campaign[index + 1].Mode == LevelMode.Defense ? index + 1 : -1;
+                result.Add(new SettlementDefinition("settlement-level-" + index, name, kind, index, defense, 20 + number * 10));
+            }
+            return result.ToArray();
+        }
+
+        private void LoadEconomy()
+        {
+            KingdomSave saved = null;
+            string json = PlayerPrefs.GetString(EconomyKey, "");
+            try
+            {
+                if (json.Length > 0) saved = JsonUtility.FromJson<KingdomSave>(json);
+                economy = new KingdomEconomy(SettlementDefinitions(), UtcSeconds(), saved);
+            }
+            catch (System.ArgumentException error)
+            {
+                PlayerPrefs.SetString(EconomyKey + ".InvalidBackup", json);
+                Debug.LogWarning("Kingdom save could not be read; backup preserved. " + error.Message, this);
+                economy = new KingdomEconomy(SettlementDefinitions(), UtcSeconds());
+            }
+            economy.Synchronize(progress, UtcSeconds());
+            SaveEconomy();
+        }
+
+        private void SaveEconomy()
+        {
+            if (economy == null) return;
+            economy.Advance(UtcSeconds());
+            PlayerPrefs.SetString(EconomyKey, JsonUtility.ToJson(economy.Export()));
+            PlayerPrefs.Save();
+        }
+        private void OnApplicationPause(bool paused) { if (paused) SaveEconomy(); }
+        private void OnApplicationQuit() => SaveEconomy();
+
+        private void ShowKingdom()
+        {
+            if (busy) return;
+            inputVersion++;
+            economy.Advance(UtcSeconds());
+            kingdomView.Open();
+        }
+
+        private void BuildKingdomView()
+        {
+            var panel = Panel("Kingdom", contentRect, Vector2.zero, new Vector2(700, 1400),
+                new Color(0.07f, 0.10f, 0.075f, 0.99f));
+            panel.raycastTarget = true;
+            kingdomView = panel.gameObject.AddComponent<KingdomView>();
+            kingdomView.Configure(economy, font,
+                () => { economy.Collect(UtcSeconds()); SaveEconomy(); },
+                stat => { bool purchased = economy.TryUpgrade(stat, UtcSeconds());
+                    if (purchased) { SaveEconomy(); RefreshCapitalCastle(); } return purchased; },
+                () => { inputVersion++; kingdomView.Hide(); });
+            kingdomView.Hide();
+        }
+
+        private void RefreshCapitalCastle()
+        {
+            if (capitalCastle == null) return;
+            foreach (Transform child in capitalCastle) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
+            PrototypeArt.Capital(capitalCastle,
+                Defense ? economy.GetCapital(CapitalStat.Strength) : 0,
+                Defense ? economy.GetCapital(CapitalStat.Terrain) : 0,
+                Defense ? economy.GetCapital(CapitalStat.Economy) : 0,
+                Defense ? economy.GetCapital(CapitalStat.Diplomacy) : 0);
+        }
+
         private void LoadProgress()
         {
             var ratings = new int[campaign.Count];
@@ -209,6 +300,7 @@ namespace Pyatnashki
             // Clear current campaign ratings and the legacy migration state.
             for (int i = 0; i < Mathf.Max(campaign.Count, levels == null ? 0 : levels.Length); i++)
                 PlayerPrefs.DeleteKey(StarsKey(i));
+            PlayerPrefs.DeleteKey(EconomyKey);
             PlayerPrefs.DeleteKey(LegacyProgressKey);
             PlayerPrefs.DeleteKey(StarsVersionKey);
             PlayerPrefs.Save();
@@ -216,6 +308,9 @@ namespace Pyatnashki
             {
                 progress = new CampaignProgress(new int[campaign.Count]);
                 SaveProgress();
+                economy = new KingdomEconomy(SettlementDefinitions(), UtcSeconds());
+                SaveEconomy();
+                if (kingdomView != null) kingdomView.SetEconomy(economy);
                 if (!busy) { StartLevel(0); ShowLevels(); }
             }
         }
@@ -259,6 +354,8 @@ namespace Pyatnashki
             }
             Label("Campaign Hint", overlay.rectTransform, new Vector2(0, -400), new Vector2(620, 130),
                 "Для наступного рівня отримай від 3 зірок.\nЗберігається найкращий результат із 5.\nНавчання не змінює прогрес. Меню — пауза.", 20, Muted);
+            MakeButton("Kingdom", overlay.rectTransform, new Vector2(0, -615),
+                new Vector2(320, 54), "Наші володіння", ShowKingdom);
             MakeButton("Back", overlay.rectTransform, new Vector2(0, -540), new Vector2(320, 60),
                 "Повернутися", CloseLevels);
             levelMenu.SetActive(false);
@@ -282,6 +379,8 @@ namespace Pyatnashki
                 new Vector2(360, 64), "Наступний рівень", () => StartLevel(levelIndex + 1));
             MakeButton("Result Levels", overlay.rectTransform, new Vector2(0, -315),
                 new Vector2(360, 64), "Вибір рівня", ShowLevels);
+            MakeButton("Result Kingdom", overlay.rectTransform, new Vector2(0, -395),
+                new Vector2(360, 64), "Наші володіння", ShowKingdom);
             resultOverlay.SetActive(false);
         }
 
@@ -299,7 +398,12 @@ namespace Pyatnashki
             RefreshInterface();
             bool won = round.State == SiegeRoundState.Won;
             int stars = LevelRating.Calculate(CurrentLevel, round);
-            if (!practiceRound && progress.Record(levelIndex, stars)) SaveProgress();
+            if (!practiceRound && progress.Record(levelIndex, stars))
+            {
+                SaveProgress();
+                economy.Synchronize(progress, UtcSeconds());
+                SaveEconomy();
+            }
             resultStars.text = new string('★', stars) + new string('☆', 5 - stars)
                 + "\n" + stars + " / 5 · Найкраще: " + progress.GetBest(levelIndex) + " / 5";
             nextLevelButton.gameObject.SetActive(!practiceRound && levelIndex + 1 < campaign.Count
@@ -334,10 +438,12 @@ namespace Pyatnashki
             background.rectTransform.offsetMin = background.rectTransform.offsetMax = Vector2.zero;
             safeRect = MakeRect("Safe Area", canvasRect, Vector2.zero, Vector2.zero);
             contentRect = MakeRect("Content", safeRect, Vector2.zero, new Vector2(700, 1400));
-            levelTitle = Label("Title", contentRect, new Vector2(-75, 650), new Vector2(470, 50),
+            levelTitle = Label("Title", contentRect, new Vector2(-90, 650), new Vector2(350, 50),
                 "", 24, Ink, FontStyle.Bold);
-            levelsButton = MakeButton("Levels", contentRect, new Vector2(270, 650),
-                new Vector2(140, 50), "Рівні", ShowLevels);
+            levelsButton = MakeButton("Levels", contentRect, new Vector2(155, 650),
+                new Vector2(105, 50), "Рівні", ShowLevels);
+            MakeButton("Kingdom Shortcut", contentRect, new Vector2(275, 650),
+                new Vector2(125, 50), "Держава", ShowKingdom);
             Label("Instructions", contentRect, new Vector2(0, 590), new Vector2(660, 55),
                 "Свайп до прогалини або торкання\nЗолота рамка — хід · ✓ — правильна позиція", 18, Muted);
 
@@ -414,6 +520,7 @@ namespace Pyatnashki
                 new Vector2(660, 40), "", 17, Ink);
             BuildResultOverlay();
             BuildLevelMenu();
+            BuildKingdomView();
             FitSafeArea();
         }
 
@@ -433,7 +540,8 @@ namespace Pyatnashki
             movesText = Label("Moves", progress.rectTransform, new Vector2(0, -12), new Vector2(290, 28), "", 20, Gold);
             correctText = Label("Correct Tiles", progress.rectTransform, new Vector2(0, -45), new Vector2(290, 40), "", 17, Ink);
             Label("Castle Title", contentRect, new Vector2(-72, 380), new Vector2(200, 30), "ЗАМОК", 22, Ink, FontStyle.Bold);
-            PrototypeArt.Castle(contentRect);
+            capitalCastle = MakeRect("Castle Appearance", contentRect, new Vector2(-72, 307), Vector2.zero);
+            RefreshCapitalCastle();
             castleArrow = Label("Castle Arrow", contentRect, new Vector2(-72, 250), new Vector2(44, 44), "↑", 36, Gold);
             routeText = Label("Route", contentRect, new Vector2(190, 310), new Vector2(260, 70), "", 19, Ink);
             goalText = Label("Goal", contentRect, new Vector2(-115, -425), new Vector2(390, 72), "", 20, Muted);
@@ -452,6 +560,7 @@ namespace Pyatnashki
             sendWarriorButton.gameObject.SetActive(diagnosticRound);
             levelTitle.text = diagnosticRound ? "ПЕРЕВІРКА МЕХАНІКИ"
                 : (levelIndex + 1) + ". " + CurrentLevel.Name + (practiceRound ? " · навчання" : "");
+            RefreshCapitalCastle();
             entryArrow.text = castleArrow.text = Defense ? "↓" : "↑";
             goalText.text = diagnosticRound ? "Перевірка механіки\nбез таймера та результату."
                 : Defense ? "Збери більше захисників, ніж ворогів.\nБій — після завершення часу."

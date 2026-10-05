@@ -91,6 +91,44 @@ namespace Pyatnashki
             Shape("Shield", root.transform, new Vector2(7, -1), new Vector2(3, 8), Gold);
         }
 
+        public static void Capital(Transform parent, int strength, int terrain, int economy, int diplomacy)
+        {
+            // The base castle's centre is normalized for both gameplay and the kingdom preview.
+            var origin = Shape("Castle Origin", parent, new Vector2(72, -307), Vector2.zero, Color.clear).rectTransform;
+            Castle(origin);
+            if (terrain > 0)
+            {
+                Shape("Moat", parent, new Vector2(0, -42), new Vector2(190, 8 + terrain * 2), new Color(0.23f, 0.40f, 0.42f));
+                Shape("Gate Bridge", parent, new Vector2(0, -42), new Vector2(22, 12 + terrain * 2), Wood);
+            }
+            for (int i = 0; i < terrain; i++) foreach (int side in new[] { -1, 1 })
+                Shape("Rocky Approach", parent, new Vector2(side * (81 + i * 10), -18 + i * 9),
+                    new Vector2(14, 15 + i * 5), new Color(0.40f, 0.44f, 0.34f));
+            for (int i = 0; i < strength; i++)
+            {
+                foreach (int side in new[] { -1, 1 })
+                    Shape("Reinforced Wall", parent, new Vector2(side * 32, -22 + i * 8), new Vector2(30, 5),
+                        Color.Lerp(new Color(0.45f, 0.46f, 0.36f), PrototypeArt.Parchment, i * 0.15f));
+                foreach (int side in new[] { -1, 1 })
+                    Shape("Tower Cap", parent, new Vector2(side * 60, 49 + i * 4), new Vector2(30, 3), PrototypeArt.Gold);
+            }
+            for (int i = 0; i < economy; i++)
+            {
+                float x = -87 + i * 18;
+                Shape("Market Stall", parent, new Vector2(x, -34), new Vector2(14, 12), PrototypeArt.Wood);
+                Shape("Market Awning", parent, new Vector2(x, -26), new Vector2(17, 5), new Color(0.82f, 0.61f, 0.25f));
+            }
+            for (int i = 0; i < diplomacy; i++)
+            {
+                float x = 77 + i * 12;
+                Shape("Ally Pole", parent, new Vector2(x, 23), new Vector2(2, 35), PrototypeArt.Wood);
+                Shape("Ally Flag", parent, new Vector2(x + 5, 33), new Vector2(10, 8),
+                    i == 0 ? new Color(0.25f, 0.49f, 0.77f) : i == 1 ? PrototypeArt.Gold : new Color(0.73f, 0.75f, 0.63f));
+                var legionary = Shape("Legionary", parent, new Vector2(28 + i * 19, -47), new Vector2(18, 18), Color.clear);
+                Warrior(legionary, true);
+            }
+        }
+
         public static void Castle(Transform parent)
         {
             Color stone = new Color(0.58f, 0.58f, 0.46f);
