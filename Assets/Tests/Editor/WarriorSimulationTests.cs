@@ -6,6 +6,35 @@ namespace Pyatnashki.Tests
 {
     public class WarriorSimulationTests
     {
+        [TestCase(0.0, false)]
+        [TestCase(61.999, false)]
+        [TestCase(62.0, false)]
+        [TestCase(62.001, true)]
+        [TestCase(144.0, true)]
+        public void OwnershipChangesOnlyWhenLeadingEdgeOverlapsDestination(double travelled, bool entered)
+        {
+            // Centres 144 apart, tile width 132, marker width 32: first overlap is after 62.
+            Assert.That(WarriorTraversal.HasEnteredDestination(travelled, 144, 132, 32),
+                Is.EqualTo(entered));
+        }
+
+        [Test]
+        public void EnteredDestinationRemainsOwnerWhenThatTileSlides()
+        {
+            var board = new SlidingBoard();
+            board.TryMoveTile(15);
+            board.TryMoveTile(14);
+            var warrior = new WarriorSimulation();
+            warrior.TryEnter(board, false);
+            Assert.That(warrior.TryMoveTo(board, false, 14), Is.True);
+            board.TryMoveTile(14);
+            warrior.NotifyBoardChanged();
+            Assert.That(warrior.CurrentTile, Is.EqualTo(14));
+            Assert.That(warrior.GetCurrentCell(board, false), Is.EqualTo(13));
+            Assert.That(warrior.Occupancy.GetCount(14), Is.EqualTo(1));
+            Assert.That(warrior.Occupancy.GetCount(15), Is.Zero);
+        }
+
         [Test]
         public void EntranceRequiresTileFacingRightAndAvailableSpace()
         {

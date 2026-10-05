@@ -14,6 +14,7 @@ namespace Pyatnashki
         [SerializeField, Min(1)] private int scrambleMoves = 24;
         [SerializeField, Min(0.01f)] private float slideDuration = 0.16f;
         [SerializeField, Min(0.05f)] private float warriorStepDuration = 0.6f;
+        [SerializeField, Min(0.05f)] private float warriorReturnDuration = 0.3f;
         private static readonly Color Ink = new Color(0.91f, 0.94f, 0.96f);
         private static readonly Color Muted = new Color(0.60f, 0.68f, 0.73f);
         private static readonly Color Gold = new Color(0.97f, 0.73f, 0.31f);
@@ -42,6 +43,9 @@ namespace Pyatnashki
         private Vector2 warriorStart, warriorEnd;
         private float warriorElapsed, warriorCooldown;
         private int warriorDestination;
+        private bool destinationEntered, warriorReturning;
+        private Vector2 warriorReturnStart, warriorReturnTarget;
+        private float warriorReturnElapsed;
 
         private void Awake()
         {
@@ -58,7 +62,9 @@ namespace Pyatnashki
 
         private void Update()
         {
-            if (!busy)
+            // Returning follows its owning tile while that tile is also sliding.
+            if (warriorReturning) AdvanceWarriorReturn();
+            else if (!busy)
             {
                 if (warriorMotion != WarriorMotion.None) AdvanceWarriorMotion();
                 else if (warriorCooldown > 0f) warriorCooldown -= Time.unscaledDeltaTime;
@@ -178,6 +184,8 @@ namespace Pyatnashki
         {
             if (busy) return;
             warriorMotion = WarriorMotion.None;
+            warriorReturning = false;
+            destinationEntered = false;
             warriorCooldown = 0.25f;
             warrior.Reset();
             if (carryTest)
@@ -270,11 +278,33 @@ namespace Pyatnashki
             warriorMarker.SetAsLastSibling();
         }
 
-        private void CancelWarriorMotion()
+        private void CancelWarriorMotion(bool synchronizeOwnership = true)
         {
+            if (synchronizeOwnership) TryTransferWarriorOwnership();
+            Vector3 worldPosition = warriorMarker.position;
             warriorMotion = WarriorMotion.None;
             warriorCooldown = 0.2f;
-            BindWarriorMarker();
+            warriorMarker.SetParent(warrior.CurrentTile == 0 ? boardRect
+                : TileTransform(warrior.CurrentTile), false);
+            warriorMarker.position = worldPosition;
+            warriorMarker.SetAsLastSibling();
+            warriorReturnStart = warriorMarker.anchoredPosition;
+            warriorReturnTarget = warrior.CurrentTile == 0 ? WarriorQueuePosition : Vector2.zero;
+            warriorReturnElapsed = 0f;
+            warriorReturning = !warrior.Completed &&
+                (warriorReturnTarget - warriorReturnStart).sqrMagnitude > 0.01f;
+        }
+
+        private void AdvanceWarriorReturn()
+        {
+            warriorReturnElapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(warriorReturnElapsed / Mathf.Max(0.05f, warriorReturnDuration));
+            warriorMarker.anchoredPosition = Vector2.Lerp(warriorReturnStart,
+                warriorReturnTarget, t * t * (3f - 2f * t));
+            if (t < 1f) return;
+            warriorMarker.anchoredPosition = warriorReturnTarget;
+            warriorReturning = false;
+            warriorCooldown = 0.2f;
         }
 
         private void QueueNextWarrior()
@@ -315,6 +345,7 @@ namespace Pyatnashki
             warriorStart = start;
             warriorEnd = end;
             warriorElapsed = 0f;
+            destinationEntered = false;
             warriorMarker.SetParent(boardRect, false);
             warriorMarker.SetAsLastSibling();
             warriorMarker.anchoredPosition = start;
@@ -325,23 +356,42 @@ namespace Pyatnashki
             warriorElapsed += Time.unscaledDeltaTime;
             float progress = Mathf.Clamp01(warriorElapsed / Mathf.Max(0.05f, warriorStepDuration));
             warriorMarker.anchoredPosition = Vector2.Lerp(warriorStart, warriorEnd, progress);
+            if (!TryTransferWarriorOwnership())
+            {
+                CancelWarriorMotion(false);
+                return;
+            }
             if (progress < 1f) return;
             bool finalPresent = finalTile.activeSelf;
-            switch (warriorMotion)
-            {
-                case WarriorMotion.Enter: warrior.TryEnter(board, finalPresent); break;
-                case WarriorMotion.Move: warrior.TryMoveTo(board, finalPresent, warriorDestination); break;
-                case WarriorMotion.Exit: warrior.TryDeliver(board, finalPresent); break;
-            }
+            if (warriorMotion == WarriorMotion.Exit) warrior.TryDeliver(board, finalPresent);
             warriorMotion = WarriorMotion.None;
             warriorCooldown = 0.2f;
             BindWarriorMarker();
+        }
+
+        private bool TryTransferWarriorOwnership()
+        {
+            if (destinationEntered || (warriorMotion != WarriorMotion.Enter
+                && warriorMotion != WarriorMotion.Move)) return true;
+            bool horizontal = Mathf.Abs(warriorEnd.x - warriorStart.x)
+                > Mathf.Abs(warriorEnd.y - warriorStart.y);
+            Vector2 size = TileTransform(warriorDestination).rect.size;
+            Vector2 markerSize = warriorMarker.rect.size;
+            Vector2 position = boardRect.InverseTransformPoint(warriorMarker.position);
+            if (!WarriorTraversal.HasEnteredDestination(Vector2.Distance(warriorStart, position),
+                Vector2.Distance(warriorStart, warriorEnd), horizontal ? size.x : size.y,
+                horizontal ? markerSize.x : markerSize.y)) return true;
+            destinationEntered = warriorMotion == WarriorMotion.Enter
+                ? warrior.TryEnter(board, finalTile.activeSelf)
+                : warrior.TryMoveTo(board, finalTile.activeSelf, warriorDestination);
+            return destinationEntered;
         }
 
         private void RefreshWarriorInterface()
         {
             sendWarriorButton.interactable = !busy && warrior.Completed;
             string state = warrior.Completed ? "Воїн дістався замку"
+                : warriorReturning ? "Повернення до центру"
                 : busy ? "Пересування дошки"
                 : warriorMotion != WarriorMotion.None ? "Воїн рухається"
                 : warrior.CurrentTile == 0 ? "Очікує входу справа" : "Очікує продовження шляху";

@@ -30,7 +30,18 @@ namespace Pyatnashki.Domain
         }
     }
 
-    /// <summary>One warrior. Animation plans do not transfer ownership until arrival.</summary>
+    public static class WarriorTraversal
+    {
+        /// <summary>A tile is entered when the leading edge overlaps its near edge.
+        /// The gap between tiles is included in centreDistance.</summary>
+        public static bool HasEnteredDestination(double travelled, double centreDistance,
+            double destinationSize, double markerSize)
+        {
+            return travelled > centreDistance - destinationSize * 0.5 - markerSize * 0.5;
+        }
+    }
+
+    /// <summary>One warrior. The view commits ownership at the tile entry boundary.</summary>
     public sealed class WarriorSimulation
     {
         private static readonly RoadPorts[] directions =
