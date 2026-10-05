@@ -112,9 +112,13 @@ namespace Pyatnashki.Domain
             return true;
         }
 
-        public static RoadNetworkResult Analyze(SlidingBoard board, bool finalTilePresent = false)
+        public static RoadNetworkResult Analyze(SlidingBoard board, bool finalTilePresent = false, bool reverseRoute = false)
         {
             if (board == null) throw new ArgumentNullException(nameof(board));
+            int source = reverseRoute ? RoadLayout.CastleCell : RoadLayout.EntryCell;
+            int destination = reverseRoute ? RoadLayout.EntryCell : RoadLayout.CastleCell;
+            RoadPorts sourcePort = reverseRoute ? RoadLayout.CastlePort : RoadLayout.EntryPort;
+            RoadPorts destinationPort = reverseRoute ? RoadLayout.EntryPort : RoadLayout.CastlePort;
             var cellPorts = new RoadPorts[SlidingBoard.CellCount];
             for (int cell = 0; cell < cellPorts.Length; cell++)
             {
@@ -126,10 +130,10 @@ namespace Pyatnashki.Domain
             for (int i = 0; i < parents.Length; i++) parents[i] = -1;
             var queue = new Queue<int>();
             int count = 0;
-            if ((cellPorts[RoadLayout.EntryCell] & RoadLayout.EntryPort) != 0)
+            if ((cellPorts[source] & sourcePort) != 0)
             {
-                reachable[RoadLayout.EntryCell] = true;
-                queue.Enqueue(RoadLayout.EntryCell);
+                reachable[source] = true;
+                queue.Enqueue(source);
                 count = 1;
             }
             while (queue.Count > 0)
@@ -146,10 +150,10 @@ namespace Pyatnashki.Domain
                 }
             }
             var path = new List<int>();
-            if (reachable[RoadLayout.CastleCell] &&
-                (cellPorts[RoadLayout.CastleCell] & RoadLayout.CastlePort) != 0)
+            if (reachable[destination] &&
+                (cellPorts[destination] & destinationPort) != 0)
             {
-                for (int cell = RoadLayout.CastleCell; cell >= 0; cell = parents[cell]) path.Add(cell);
+                for (int cell = destination; cell >= 0; cell = parents[cell]) path.Add(cell);
                 path.Reverse();
             }
             return new RoadNetworkResult(reachable, count, path.ToArray());

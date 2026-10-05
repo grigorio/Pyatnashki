@@ -394,8 +394,54 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab7a88d92410466ea15387d400000008, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  scrambleMoves: 24
   slideDuration: 0.16
-  soldierSupply: 20
-  captureTarget: 12
-  roundTimeSeconds: 120
+  levels:
+  - name: Перша облога
+    mode: 0
+    supply: 20
+    captureTarget: 12
+    duration: 120
+    scrambleMoves: 24
+    enemyTotal: 10
+    enemyInterval: 5
+  - name: Збір захисників
+    mode: 1
+    supply: 20
+    captureTarget: 12
+    duration: 120
+    scrambleMoves: 16
+    enemyTotal: 10
+    enemyInterval: 8
+  - name: Укріплений замок
+    mode: 0
+    supply: 24
+    captureTarget: 16
+    duration: 105
+    scrambleMoves: 32
+    enemyTotal: 10
+    enemyInterval: 5
+  - name: Ворог на кордоні
+    mode: 1
+    supply: 24
+    captureTarget: 12
+    duration: 105
+    scrambleMoves: 28
+    enemyTotal: 16
+    enemyInterval: 5
+  - name: Велика облога
+    mode: 0
+    supply: 32
+    captureTarget: 22
+    duration: 90
+    scrambleMoves: 40
+    enemyTotal: 10
+    enemyInterval: 5
+  - name: Останній рубіж
+    mode: 1
+    supply: 32
+    captureTarget: 12
+    duration: 90
+    scrambleMoves: 36
+    enemyTotal: 22
+    enemyInterval: 3
+  unlockAllLevelsForDevelopment: 0

@@ -91,9 +91,16 @@ namespace Pyatnashki.Domain
         public int DeliveredCount { get; private set; }
         public bool Completed { get; private set; }
 
-        public WarriorSimulation(TileOccupancy occupancy = null)
+        private readonly bool reverseRoute;
+        private int SourceCell => reverseRoute ? RoadLayout.CastleCell : RoadLayout.EntryCell;
+        private RoadPorts SourcePort => reverseRoute ? RoadLayout.CastlePort : RoadLayout.EntryPort;
+        private int DestinationCell => reverseRoute ? RoadLayout.EntryCell : RoadLayout.CastleCell;
+        private RoadPorts DestinationPort => reverseRoute ? RoadLayout.EntryPort : RoadLayout.CastlePort;
+
+        public WarriorSimulation(TileOccupancy occupancy = null, bool reverseRoute = false)
         {
             Occupancy = occupancy ?? new TileOccupancy();
+            this.reverseRoute = reverseRoute;
         }
 
         public void Reset()
@@ -116,15 +123,15 @@ namespace Pyatnashki.Domain
         public bool CanEnter(SlidingBoard board, bool finalTilePresent)
         {
             if (CurrentTile != 0 || Completed) return false;
-            int tile = RoadNetwork.GetTileAt(board, RoadLayout.EntryCell, finalTilePresent);
-            return tile != 0 && (RoadLayout.GetPorts(tile) & RoadLayout.EntryPort) != 0
+            int tile = RoadNetwork.GetTileAt(board, SourceCell, finalTilePresent);
+            return tile != 0 && (RoadLayout.GetPorts(tile) & SourcePort) != 0
                 && (ReservedTile == tile || Occupancy.HasSpace(tile));
         }
 
         public bool TryEnter(SlidingBoard board, bool finalTilePresent)
         {
             if (!CanEnter(board, finalTilePresent)) return false;
-            int tile = RoadNetwork.GetTileAt(board, RoadLayout.EntryCell, finalTilePresent);
+            int tile = RoadNetwork.GetTileAt(board, SourceCell, finalTilePresent);
             if (!EnterDestination(tile)) return false;
             CurrentTile = tile;
             visited.Add(tile);
@@ -142,8 +149,8 @@ namespace Pyatnashki.Domain
 
         public bool CanDeliver(SlidingBoard board, bool finalTilePresent)
         {
-            return CurrentTile != 0 && GetCurrentCell(board, finalTilePresent) == RoadLayout.CastleCell
-                && (RoadLayout.GetPorts(CurrentTile) & RoadLayout.CastlePort) != 0;
+            return CurrentTile != 0 && GetCurrentCell(board, finalTilePresent) == DestinationCell
+                && (RoadLayout.GetPorts(CurrentTile) & DestinationPort) != 0;
         }
 
         public bool TryDeliver(SlidingBoard board, bool finalTilePresent)
@@ -168,7 +175,7 @@ namespace Pyatnashki.Domain
             if (ReservedTile != 0 || Completed || tile < 1 || tile > RoadLayout.FinalTile) return false;
             bool valid = CurrentTile == 0
                 ? CanEnter(board, finalTilePresent) &&
-                    RoadNetwork.GetTileAt(board, RoadLayout.EntryCell, finalTilePresent) == tile
+                    RoadNetwork.GetTileAt(board, SourceCell, finalTilePresent) == tile
                 : CanMoveTo(board, finalTilePresent, tile);
             if (!valid || !Occupancy.TryReserve(tile)) return false;
             ReservedTile = tile;
@@ -236,7 +243,7 @@ namespace Pyatnashki.Domain
             {
                 int cell = queue.Dequeue();
                 int tile = RoadNetwork.GetTileAt(board, cell, finalTilePresent);
-                if (cell == RoadLayout.CastleCell && (RoadLayout.GetPorts(tile) & RoadLayout.CastlePort) != 0)
+                if (cell == DestinationCell && (RoadLayout.GetPorts(tile) & DestinationPort) != 0)
                 {
                     destination = cell;
                     break;
