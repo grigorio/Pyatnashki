@@ -20,6 +20,7 @@ namespace Pyatnashki
         [SerializeField, Min(0.1f)] private float roundTimeSeconds = 120f;
         private readonly SiegeRound round = new SiegeRound();
         private bool diagnosticRound;
+        private bool capacityStressTest;
         private GameObject resultOverlay;
         private Text resultTitle, resultDetails, timeText, goalText;
         private bool RoundEnded => !diagnosticRound &&
@@ -266,6 +267,7 @@ namespace Pyatnashki
         {
             if (busy) return;
             diagnosticRound = carryTest || capacityTest;
+            capacityStressTest = capacityTest;
             round.Reset();
             if (!diagnosticRound)
                 round.Start(Mathf.Clamp(soldierSupply, 1, 99),
@@ -277,19 +279,18 @@ namespace Pyatnashki
                 : "Достав " + round.Target + " воїнів до замку\nза відведений час.";
             deliveredTotal = waveNumber = 0;
             waveSpawnInterval = capacityTest ? 0.1f : Mathf.Max(0.05f, spawnInterval);
-            if (capacityTest) board.ResetSolved();
-            else if (carryTest)
+            if (carryTest || capacityTest)
             {
                 board.ResetSolved();
                 board.TryMoveTile(15);
                 board.ResetMoveCount();
             }
             else board.Shuffle(random, Mathf.Max(1, steps));
-            finalTile.SetActive(capacityTest);
+            finalTile.SetActive(false);
             for (int tile = 1; tile < SlidingBoard.CellCount; tile++)
                 tiles[tile].anchoredPosition = CellPosition(board.GetIndexOf(tile));
             statusText.text = capacityTest
-                ? "Тест місткості: спостерігай за чергою перед плиткою 1."
+                ? "Плитка 15 вмістить 15 воїнів. Склади дошку — ліміти зникнуть."
                 : carryTest
                 ? "Дочекайся воїнів на плитці 15, потім пересунь її разом із ними."
                 : steps == 1
@@ -336,6 +337,7 @@ namespace Pyatnashki
 
         private void RefreshInterface(bool updateRoads = true)
         {
+            occupancy.UpdateCapacityMode(board, finalTile.activeSelf);
             movesText.text = "Ходи: " + board.MoveCount;
             correctText.text = "На своїх місцях\n" + board.CorrectTileCount + " / 15";
             emptyMarker.anchoredPosition = CellPosition(board.EmptyIndex);
@@ -399,9 +401,11 @@ namespace Pyatnashki
             }
             warriors.Clear();
             occupancy.Clear();
+            occupancy.UpdateCapacityMode(board, finalTile.activeSelf);
             entryClock = 0.25f;
             waveNumber++;
-            int count = diagnosticRound ? Mathf.Clamp(waveSize, 1, 16) : round.Supply;
+            int count = capacityStressTest ? 16
+                : diagnosticRound ? Mathf.Clamp(waveSize, 1, 16) : round.Supply;
             for (int i = 0; i < count; i++)
             {
                 var marker = Panel("Warrior " + (i + 1), boardRect, WarriorQueuePosition,
@@ -447,7 +451,8 @@ namespace Pyatnashki
                 ? new Color(1f, 0.35f, 0.30f) : Gold;
             for (int tile = 1; tile <= 16; tile++)
             {
-                capacityTexts[tile].text = occupancy.GetCount(tile) + "/" + tile;
+                capacityTexts[tile].text = occupancy.GetCount(tile) + "/"
+                    + (occupancy.UnlimitedCapacity ? "∞" : tile.ToString());
                 int reserved = occupancy.GetReservedCount(tile);
                 reservationTexts[tile].text = reserved == 0 ? "" : "+" + reserved;
             }

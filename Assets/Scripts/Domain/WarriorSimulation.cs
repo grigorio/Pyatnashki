@@ -8,10 +8,21 @@ namespace Pyatnashki.Domain
     {
         private readonly int[] counts = new int[RoadLayout.FinalTile + 1];
         private readonly int[] reservations = new int[RoadLayout.FinalTile + 1];
+        public bool UnlimitedCapacity { get; private set; }
+
+        public void UpdateCapacityMode(SlidingBoard board, bool finalTilePresent)
+        {
+            if (board == null) throw new ArgumentNullException(nameof(board));
+            UnlimitedCapacity = board.IsSolved && finalTilePresent;
+        }
 
         public int GetCount(int tile) { Validate(tile); return counts[tile]; }
         public int GetReservedCount(int tile) { Validate(tile); return reservations[tile]; }
-        public bool HasSpace(int tile) { Validate(tile); return counts[tile] + reservations[tile] < tile; }
+        public bool HasSpace(int tile)
+        {
+            Validate(tile);
+            return UnlimitedCapacity || counts[tile] + reservations[tile] < tile;
+        }
         public bool TryReserve(int tile)
         {
             if (!HasSpace(tile)) return false;
@@ -48,6 +59,7 @@ namespace Pyatnashki.Domain
         {
             Array.Clear(counts, 0, counts.Length);
             Array.Clear(reservations, 0, reservations.Length);
+            UnlimitedCapacity = false;
         }
         private static void Validate(int tile)
         {

@@ -6,6 +6,61 @@ namespace Pyatnashki.Tests
     public class WarriorWaveTests
     {
         [Test]
+        public void OnlyCompletedBoardWithFinalTileDisablesLimits()
+        {
+            var board = new SlidingBoard();
+            var ledger = new TileOccupancy();
+            ledger.UpdateCapacityMode(board, false);
+            Assert.That(ledger.UnlimitedCapacity, Is.False);
+            board.TryMoveTile(15);
+            ledger.UpdateCapacityMode(board, true);
+            Assert.That(ledger.UnlimitedCapacity, Is.False);
+            board.TryMoveTile(15);
+            ledger.UpdateCapacityMode(board, true);
+            Assert.That(ledger.UnlimitedCapacity, Is.True);
+            ledger.Clear();
+            Assert.That(ledger.UnlimitedCapacity, Is.False);
+        }
+
+        [Test]
+        public void SolvingBoardUnblocksFullTileWithoutLosingOccupantsOrReservations()
+        {
+            var board = new SlidingBoard();
+            var ledger = new TileOccupancy();
+            var w = new WarriorSimulation(ledger);
+            w.TryEnter(board, true);
+            w.TryMoveTo(board, true, 15);
+            for (int i = 0; i < 14; i++) ledger.TryEnter(14);
+            Assert.That(w.GetNextTile(board, true), Is.Zero);
+            ledger.TryReserve(1);
+            ledger.UpdateCapacityMode(board, true);
+            Assert.That(ledger.GetCount(14), Is.EqualTo(14));
+            Assert.That(ledger.GetReservedCount(1), Is.EqualTo(1));
+            Assert.That(w.GetNextTile(board, true), Is.EqualTo(14));
+            Assert.That(w.ReserveDestination(board, true, 14), Is.True);
+            Assert.That(w.TryMoveTo(board, true, 14), Is.True);
+            Assert.That(ledger.GetCount(14), Is.EqualTo(15));
+            Assert.That(ledger.GetReservedCount(14), Is.Zero);
+        }
+
+        [Test]
+        public void UnlimitedTileAcceptsMultipleReservedArrivals()
+        {
+            var ledger = new TileOccupancy();
+            ledger.UpdateCapacityMode(new SlidingBoard(), true);
+            for (int i = 0; i < 20; i++) Assert.That(ledger.TryReserve(1), Is.True);
+            for (int i = 0; i < 20; i++) Assert.That(ledger.TryEnterReserved(1), Is.True);
+            Assert.That(ledger.GetCount(1), Is.EqualTo(20));
+            Assert.That(ledger.GetReservedCount(1), Is.Zero);
+            Assert.That(ledger.TryEnter(1), Is.True);
+            for (int i = 0; i < 21; i++) ledger.Leave(1);
+            Assert.That(ledger.GetCount(1), Is.Zero);
+            ledger.Clear();
+            Assert.That(ledger.TryEnter(1), Is.True);
+            Assert.That(ledger.TryEnter(1), Is.False);
+        }
+
+        [Test]
         public void ReservationsPreventTwoActorsClaimingLastSlot()
         {
             var ledger = new TileOccupancy();
