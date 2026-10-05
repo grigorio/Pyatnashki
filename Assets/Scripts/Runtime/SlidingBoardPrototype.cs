@@ -17,9 +17,12 @@ namespace Pyatnashki
         [SerializeField] private LevelSettings[] levels = LevelSettings.Defaults();
         [SerializeField] private bool unlockAllLevelsForDevelopment;
         private readonly List<LevelDefinition> campaign = new List<LevelDefinition>();
-        private int levelIndex, unlockedLevels;
+        private int levelIndex;
+        private CampaignProgress progress;
         private bool practiceRound;
-        private const string ProgressKey = "Pyatnashki.Campaign.Unlocked.v1";
+        private const string LegacyProgressKey = "Pyatnashki.Campaign.Unlocked.v1";
+        private const string StarsVersionKey = "Pyatnashki.Campaign.Stars.v2";
+        private static string StarsKey(int index) => StarsVersionKey + ".Level." + index;
         private readonly List<Button> levelButtons = new List<Button>();
         private readonly List<string> levelCaptions = new List<string>();
         private GameObject levelMenu;
@@ -36,7 +39,7 @@ namespace Pyatnashki
         private bool diagnosticRound;
         private bool capacityStressTest;
         private GameObject resultOverlay;
-        private Text resultTitle, resultDetails, timeText, goalText;
+        private Text resultTitle, resultDetails, resultStars, timeText, goalText;
         private bool RoundEnded => !diagnosticRound &&
             (round.State == SiegeRoundState.Won || round.State == SiegeRoundState.Lost);
         private static readonly Color Ink = new Color(0.91f, 0.94f, 0.96f);
@@ -110,7 +113,7 @@ namespace Pyatnashki
                 enabled = false;
                 return;
             }
-            unlockedLevels = Mathf.Clamp(PlayerPrefs.GetInt(ProgressKey, 1), 1, campaign.Count);
+            LoadProgress();
             BuildInterface();
             StartLevel(0);
             ShowLevels();
@@ -144,7 +147,7 @@ namespace Pyatnashki
         private void StartLevel(int index, bool practice = false)
         {
             if (busy || index < 0 || index >= campaign.Count
-                || (!unlockAllLevelsForDevelopment && index >= unlockedLevels)) return;
+                || (!unlockAllLevelsForDevelopment && !progress.IsUnlocked(index))) return;
             levelIndex = index;
             practiceRound = practice;
             levelMenu.SetActive(false);
@@ -157,10 +160,12 @@ namespace Pyatnashki
             inputVersion++;
             for (int i = 0; i < levelButtons.Count; i++)
             {
-                bool available = unlockAllLevelsForDevelopment || i < unlockedLevels;
+                bool available = unlockAllLevelsForDevelopment || progress.IsUnlocked(i);
                 levelButtons[i].interactable = available;
                 Text caption = levelButtons[i].GetComponentInChildren<Text>();
-                caption.text = available ? levelCaptions[i] : "ЗАБЛОКОВАНО\n" + levelCaptions[i];
+                caption.text = (available ? "" : "ЗАБЛОКОВАНО · потрібні 3 зірки\n")
+                    + levelCaptions[i] + "\nНайкраще: " + progress.GetBest(i) + " / 5";
+                caption.fontSize = 19;
                 caption.color = available ? Ink : Muted;
                 levelButtons[i].targetGraphic.color = available
                     ? new Color(0.22f, 0.32f, 0.39f) : new Color(0.10f, 0.15f, 0.19f);
@@ -175,16 +180,41 @@ namespace Pyatnashki
             levelMenu.SetActive(false);
         }
 
+        private void LoadProgress()
+        {
+            var ratings = new int[campaign.Count];
+            for (int i = 0; i < ratings.Length; i++)
+                ratings[i] = Mathf.Clamp(PlayerPrefs.GetInt(StarsKey(i), 0), 0, 5);
+            progress = new CampaignProgress(ratings);
+            if (!PlayerPrefs.HasKey(StarsVersionKey))
+            {
+                int oldUnlocked = Mathf.Clamp(PlayerPrefs.GetInt(LegacyProgressKey, 1), 1, campaign.Count);
+                progress.MigrateLegacyUnlocks(oldUnlocked);
+                SaveProgress();
+            }
+        }
+
+        private void SaveProgress()
+        {
+            for (int i = 0; i < progress.Count; i++) PlayerPrefs.SetInt(StarsKey(i), progress.GetBest(i));
+            PlayerPrefs.SetInt(StarsVersionKey, 1);
+            PlayerPrefs.Save();
+        }
+
         [ContextMenu("Reset campaign progress")]
         private void ResetCampaignProgress()
         {
-            PlayerPrefs.DeleteKey(ProgressKey);
+            // Clear current campaign ratings and the legacy migration state.
+            for (int i = 0; i < Mathf.Max(campaign.Count, levels == null ? 0 : levels.Length); i++)
+                PlayerPrefs.DeleteKey(StarsKey(i));
+            PlayerPrefs.DeleteKey(LegacyProgressKey);
+            PlayerPrefs.DeleteKey(StarsVersionKey);
             PlayerPrefs.Save();
-            unlockedLevels = 1;
-            if (campaign.Count > 0 && !busy)
+            if (campaign.Count > 0)
             {
-                StartLevel(0);
-                ShowLevels();
+                progress = new CampaignProgress(new int[campaign.Count]);
+                SaveProgress();
+                if (!busy) { StartLevel(0); ShowLevels(); }
             }
         }
 
@@ -226,7 +256,7 @@ namespace Pyatnashki
                 row.anchorMin = row.anchorMax = new Vector2(0.5f, 1);
             }
             Label("Campaign Hint", overlay.rectTransform, new Vector2(0, -400), new Vector2(620, 130),
-                "Перемога відкриває наступний рівень.\nНавчання та діагностика не відкривають рівні.\nПід час вибору рівня гра призупинена.", 20, Muted);
+                "Для наступного рівня отримай від 3 зірок.\nЗберігається найкращий результат із 5.\nНавчання не змінює прогрес. Меню — пауза.", 20, Muted);
             MakeButton("Back", overlay.rectTransform, new Vector2(0, -540), new Vector2(320, 60),
                 "Повернутися", CloseLevels);
             levelMenu.SetActive(false);
@@ -238,8 +268,10 @@ namespace Pyatnashki
                 new Color(0.025f, 0.045f, 0.065f, 0.96f));
             overlay.raycastTarget = true;
             resultOverlay = overlay.gameObject;
-            resultTitle = Label("Result Title", overlay.rectTransform, new Vector2(0, 130),
-                new Vector2(640, 80), "", 34, Gold, FontStyle.Bold);
+            resultTitle = Label("Result Title", overlay.rectTransform, new Vector2(0, 245),
+                new Vector2(640, 70), "", 34, Gold, FontStyle.Bold);
+            resultStars = Label("Result Stars", overlay.rectTransform, new Vector2(0, 145),
+                new Vector2(620, 75), "", 24, Gold, FontStyle.Bold);
             resultDetails = Label("Result Details", overlay.rectTransform, new Vector2(0, 5),
                 new Vector2(620, 180), "", 24, Ink);
             MakeButton("Retry", overlay.rectTransform, new Vector2(0, -155),
@@ -264,13 +296,12 @@ namespace Pyatnashki
             }
             RefreshInterface();
             bool won = round.State == SiegeRoundState.Won;
-            if (won && !practiceRound)
-            {
-                unlockedLevels = Mathf.Max(unlockedLevels, Mathf.Min(campaign.Count, levelIndex + 2));
-                PlayerPrefs.SetInt(ProgressKey, unlockedLevels);
-                PlayerPrefs.Save();
-            }
-            nextLevelButton.gameObject.SetActive(won && !practiceRound && levelIndex + 1 < campaign.Count);
+            int stars = LevelRating.Calculate(CurrentLevel, round);
+            if (!practiceRound && progress.Record(levelIndex, stars)) SaveProgress();
+            resultStars.text = new string('★', stars) + new string('☆', 5 - stars)
+                + "\n" + stars + " / 5 · Найкраще: " + progress.GetBest(levelIndex) + " / 5";
+            nextLevelButton.gameObject.SetActive(!practiceRound && levelIndex + 1 < campaign.Count
+                && progress.IsUnlocked(levelIndex + 1));
             resultTitle.text = Defense ? (won ? "ЗЕМЛЮ ЗАХИЩЕНО!" : "ЗАХИСТ НЕ ВДАВСЯ")
                 : won ? "ЗАМОК ЗАХОПЛЕНО!" : "ЧАС ВИЧЕРПАНО";
             resultTitle.color = won ? Gold : new Color(1f, 0.35f, 0.30f);

@@ -16,8 +16,14 @@ namespace Pyatnashki
         [Range(0, 99)] public int enemyTotal = 10;
         [Min(0.1f)] public float enemyInterval = 5;
 
+        [Range(0.01f, 1)] public float fourStarTimeFraction = 0.25f;
+        [Range(0.01f, 1)] public float fiveStarTimeFraction = 0.5f;
+        [Min(2)] public int fourStarAdvantage = 3;
+        [Min(3)] public int fiveStarAdvantage = 6;
+
         public LevelDefinition ToDefinition() => new LevelDefinition(name, mode, supply,
-            captureTarget, duration, scrambleMoves, enemyTotal, enemyInterval);
+            captureTarget, duration, scrambleMoves, enemyTotal, enemyInterval,
+            fourStarTimeFraction, fiveStarTimeFraction, fourStarAdvantage, fiveStarAdvantage);
 
         public static LevelSettings[] Defaults() => new[]
         {

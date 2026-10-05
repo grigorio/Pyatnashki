@@ -404,6 +404,10 @@ MonoBehaviour:
     scrambleMoves: 24
     enemyTotal: 10
     enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
   - name: Збір захисників
     mode: 1
     supply: 20
@@ -412,6 +416,10 @@ MonoBehaviour:
     scrambleMoves: 16
     enemyTotal: 10
     enemyInterval: 8
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
   - name: Укріплений замок
     mode: 0
     supply: 24
@@ -420,6 +428,10 @@ MonoBehaviour:
     scrambleMoves: 32
     enemyTotal: 10
     enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
   - name: Ворог на кордоні
     mode: 1
     supply: 24
@@ -428,6 +440,10 @@ MonoBehaviour:
     scrambleMoves: 28
     enemyTotal: 16
     enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
   - name: Велика облога
     mode: 0
     supply: 32
@@ -436,6 +452,10 @@ MonoBehaviour:
     scrambleMoves: 40
     enemyTotal: 10
     enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
   - name: Останній рубіж
     mode: 1
     supply: 32
@@ -444,4 +464,8 @@ MonoBehaviour:
     scrambleMoves: 36
     enemyTotal: 22
     enemyInterval: 3
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
   unlockAllLevelsForDevelopment: 0
