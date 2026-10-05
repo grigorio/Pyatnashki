@@ -15,6 +15,15 @@ namespace Pyatnashki
         [SerializeField, Min(0.01f)] private float slideDuration = 0.16f;
         [SerializeField, Min(0.05f)] private float warriorStepDuration = 0.6f;
         [SerializeField, Min(0.05f)] private float warriorReturnDuration = 0.3f;
+        [SerializeField, Range(1, 99)] private int soldierSupply = 20;
+        [SerializeField, Min(1)] private int captureTarget = 12;
+        [SerializeField, Min(0.1f)] private float roundTimeSeconds = 120f;
+        private readonly SiegeRound round = new SiegeRound();
+        private bool diagnosticRound;
+        private GameObject resultOverlay;
+        private Text resultTitle, resultDetails, timeText, goalText;
+        private bool RoundEnded => !diagnosticRound &&
+            (round.State == SiegeRoundState.Won || round.State == SiegeRoundState.Lost);
         private static readonly Color Ink = new Color(0.91f, 0.94f, 0.96f);
         private static readonly Color Muted = new Color(0.60f, 0.68f, 0.73f);
         private static readonly Color Gold = new Color(0.97f, 0.73f, 0.31f);
@@ -74,6 +83,12 @@ namespace Pyatnashki
 
         private void Update()
         {
+            if (RoundEnded) return;
+            if (!diagnosticRound)
+            {
+                round.Advance(Time.unscaledDeltaTime);
+                if (RoundEnded) { FinishRound(); return; }
+            }
             if (!busy) entryClock = Mathf.Max(0f, entryClock - Time.unscaledDeltaTime);
             foreach (WarriorView w in warriors)
             {
@@ -84,11 +99,55 @@ namespace Pyatnashki
                     else if (w.Cooldown > 0f) w.Cooldown -= Time.unscaledDeltaTime;
                     else PlanWarriorMotion(w);
                 }
+                if (RoundEnded) { FinishRound(); break; }
             }
             RefreshWarriorInterface();
         }
 
         private void LateUpdate() => FitSafeArea();
+
+        private void OnValidate()
+        {
+            soldierSupply = Mathf.Clamp(soldierSupply, 1, 99);
+            captureTarget = Mathf.Clamp(captureTarget, 1, soldierSupply);
+            roundTimeSeconds = Mathf.Max(0.1f, roundTimeSeconds);
+        }
+
+        private void BuildResultOverlay()
+        {
+            var overlay = Panel("Round Result", contentRect, Vector2.zero, new Vector2(1500, 840),
+                new Color(0.025f, 0.045f, 0.065f, 0.96f));
+            overlay.raycastTarget = true;
+            resultOverlay = overlay.gameObject;
+            resultTitle = Label("Result Title", overlay.rectTransform, new Vector2(0, 130),
+                new Vector2(1200, 80), "", 43, Gold, FontStyle.Bold);
+            resultDetails = Label("Result Details", overlay.rectTransform, new Vector2(0, 5),
+                new Vector2(1000, 150), "", 26, Ink);
+            MakeButton("Retry", overlay.rectTransform, new Vector2(0, -155),
+                new Vector2(360, 64), "Новий раунд", () => StartRound(scrambleMoves));
+            resultOverlay.SetActive(false);
+        }
+
+        private void FinishRound()
+        {
+            if (!RoundEnded || resultOverlay.activeSelf) return;
+            StopAllCoroutines();
+            busy = false;
+            foreach (WarriorView w in warriors)
+            {
+                w.Model.CancelReservation();
+                w.Motion = WarriorMotion.None;
+                w.Returning = false;
+            }
+            RefreshInterface();
+            bool won = round.State == SiegeRoundState.Won;
+            resultTitle.text = won ? "ЗАМОК ЗАХОПЛЕНО!" : "ЧАС ВИЧЕРПАНО";
+            resultTitle.color = won ? Gold : new Color(1f, 0.35f, 0.30f);
+            resultDetails.text = "Доставлено воїнів: " + round.Delivered + " / " + round.Target
+                + "\nХоди: " + board.MoveCount + "\nВитрачено часу: " + round.Elapsed.ToString("0.0") + " с";
+            resultOverlay.SetActive(true);
+            resultOverlay.transform.SetAsLastSibling();
+        }
 
         private void BuildInterface()
         {
@@ -169,6 +228,7 @@ namespace Pyatnashki
                 new Vector2(300, 40), "Тест місткості", () => StartRound(1, false, true));
             statusText = Label("Status", contentRect, new Vector2(0, -405),
                 new Vector2(1360, 28), "", 20, Ink);
+            BuildResultOverlay();
             FitSafeArea();
         }
 
@@ -190,19 +250,31 @@ namespace Pyatnashki
                 new Vector2(320, 370), panel);
             Label("Progress Title", right.rectTransform, new Vector2(0, 135),
                 new Vector2(290, 40), "ДОШКА", 27, Ink, FontStyle.Bold);
-            movesText = Label("Moves", right.rectTransform, new Vector2(0, 60),
-                new Vector2(290, 45), "", 27, Gold, FontStyle.Bold);
-            correctText = Label("Correct Tiles", right.rectTransform, Vector2.zero,
-                new Vector2(290, 65), "", 23, Ink);
+            timeText = Label("Time", right.rectTransform, new Vector2(0, 95),
+                new Vector2(290, 30), "", 23, Gold, FontStyle.Bold);
+            movesText = Label("Moves", right.rectTransform, new Vector2(0, 50),
+                new Vector2(290, 38), "", 25, Gold, FontStyle.Bold);
+            correctText = Label("Correct Tiles", right.rectTransform, new Vector2(0, -8),
+                new Vector2(290, 52), "", 22, Ink);
             routeText = Label("Route", right.rectTransform, new Vector2(0, -65),
                 new Vector2(290, 52), "", 20, Ink);
-            Label("Goal", right.rectTransform, new Vector2(0, -132), new Vector2(290, 58),
+            goalText = Label("Goal", right.rectTransform, new Vector2(0, -132), new Vector2(290, 58),
                 "Склади 1–15 рядок за рядком.\nДороги рухаються без обертання.", 17, Muted);
         }
 
         private void StartRound(int steps, bool carryTest = false, bool capacityTest = false)
         {
             if (busy) return;
+            diagnosticRound = carryTest || capacityTest;
+            round.Reset();
+            if (!diagnosticRound)
+                round.Start(Mathf.Clamp(soldierSupply, 1, 99),
+                    Mathf.Clamp(captureTarget, 1, Mathf.Clamp(soldierSupply, 1, 99)),
+                    Mathf.Max(0.1f, roundTimeSeconds));
+            resultOverlay.SetActive(false);
+            sendWarriorButton.gameObject.SetActive(diagnosticRound);
+            goalText.text = diagnosticRound ? "Перевірка механіки\nбез таймера та результату."
+                : "Достав " + round.Target + " воїнів до замку\nза відведений час.";
             deliveredTotal = waveNumber = 0;
             waveSpawnInterval = capacityTest ? 0.1f : Mathf.Max(0.05f, spawnInterval);
             if (capacityTest) board.ResetSolved();
@@ -229,7 +301,7 @@ namespace Pyatnashki
 
         private void RequestMove(int tile)
         {
-            if (busy || board.IsSolved || !board.CanMoveTile(tile)) return;
+            if (busy || RoundEnded || board.IsSolved || !board.CanMoveTile(tile)) return;
             foreach (WarriorView w in warriors) CancelWarriorMotion(w);
             Vector2 destination = CellPosition(board.EmptyIndex);
             if (!board.TryMoveTile(tile)) return;
@@ -268,12 +340,11 @@ namespace Pyatnashki
             correctText.text = "На своїх місцях\n" + board.CorrectTileCount + " / 15";
             emptyMarker.anchoredPosition = CellPosition(board.EmptyIndex);
             emptyMarker.gameObject.SetActive(!board.IsSolved);
-            shuffleButton.interactable = practiceButton.interactable = !busy;
-            carryTestButton.interactable = !busy;
-            capacityTestButton.interactable = !busy;
+            shuffleButton.interactable = practiceButton.interactable = !busy && !RoundEnded;
+            carryTestButton.interactable = capacityTestButton.interactable = !busy && !RoundEnded;
             for (int tile = 1; tile < SlidingBoard.CellCount; tile++)
             {
-                bool movable = !busy && !board.IsSolved && board.CanMoveTile(tile);
+                bool movable = !busy && !RoundEnded && !board.IsSolved && board.CanMoveTile(tile);
                 buttons[tile].interactable = movable;
                 images[tile].color = movable ? Gold : board.GetIndexOf(tile) == tile - 1
                     ? new Color(0.45f, 0.72f, 0.61f) : new Color(0.70f, 0.76f, 0.78f);
@@ -285,7 +356,15 @@ namespace Pyatnashki
         private Vector2 WarriorQueuePosition => CellPosition(RoadLayout.EntryCell) + new Vector2(144, 0);
 
         private static Vector2 SlotOffset(WarriorView w) => new Vector2(
-            (w.Id % 4 - 1.5f) * 18f, (w.Id / 4 - 1.5f) * 18f);
+            (w.Id % 16 % 4 - 1.5f) * 18f, (w.Id % 16 / 4 - 1.5f) * 18f);
+
+        private bool VisualSlotAvailable(WarriorView w)
+        {
+            foreach (WarriorView other in warriors)
+                if (other != w && other.Id % 16 == w.Id % 16 && !other.Model.Completed
+                    && (other.Model.CurrentTile != 0 || other.Motion == WarriorMotion.Enter)) return false;
+            return true;
+        }
 
         private Vector2 MarkerBoardPosition(WarriorView w) => boardRect.InverseTransformPoint(w.Marker.position);
 
@@ -322,7 +401,8 @@ namespace Pyatnashki
             occupancy.Clear();
             entryClock = 0.25f;
             waveNumber++;
-            for (int i = 0; i < Mathf.Clamp(waveSize, 1, 16); i++)
+            int count = diagnosticRound ? Mathf.Clamp(waveSize, 1, 16) : round.Supply;
+            for (int i = 0; i < count; i++)
             {
                 var marker = Panel("Warrior " + (i + 1), boardRect, WarriorQueuePosition,
                     new Vector2(18, 18), new Color(0.88f, 0.12f + i * 0.012f, 0.18f)).rectTransform;
@@ -337,7 +417,7 @@ namespace Pyatnashki
 
         private void QueueNextWave()
         {
-            if (busy || !WaveCompleted()) return;
+            if (busy || !diagnosticRound || !WaveCompleted()) return;
             CreateWave();
             RefreshWarriorInterface();
         }
@@ -354,10 +434,17 @@ namespace Pyatnashki
                 if (w.Model.CurrentTile == 0 && w.Motion == WarriorMotion.None && !w.Returning)
                     w.Marker.gameObject.SetActive(IsQueueHead(w));
             }
-            sendWarriorButton.interactable = !busy && WaveCompleted();
-            warriorText.text = "Доставлено: " + deliveredTotal + "\nНа вході: " + queued
+            sendWarriorButton.interactable = diagnosticRound && !busy && WaveCompleted();
+            warriorText.text = "Доставлено: " + deliveredTotal
+                + (diagnosticRound ? "" : "/" + round.Target) + "\nНа вході: " + queued
                 + " • На полі: " + onBoard + "\nРухаються: " + moving + " • Чекають: " + waiting
-                + "\nХвиля: " + waveNumber + " (" + warriors.Count + ")";
+                + (diagnosticRound ? "\nХвиля: " + waveNumber + " (" + warriors.Count + ")"
+                    : "\nЗагальний запас: " + round.Supply);
+            int seconds = Mathf.CeilToInt((float)round.Remaining);
+            timeText.text = diagnosticRound ? "Без таймера"
+                : "Час: " + (seconds / 60) + ":" + (seconds % 60).ToString("00");
+            timeText.color = !diagnosticRound && round.Remaining <= 15
+                ? new Color(1f, 0.35f, 0.30f) : Gold;
             for (int tile = 1; tile <= 16; tile++)
             {
                 capacityTexts[tile].text = occupancy.GetCount(tile) + "/" + tile;
@@ -417,7 +504,7 @@ namespace Pyatnashki
             bool finalPresent = finalTile.activeSelf;
             if (w.Model.CurrentTile == 0)
             {
-                if (!IsQueueHead(w) || entryClock > 0f || EntryInProgress()
+                if (!IsQueueHead(w) || !VisualSlotAvailable(w) || entryClock > 0f || EntryInProgress()
                     || !w.Model.CanEnter(board, finalPresent)) return;
                 int tile = RoadNetwork.GetTileAt(board, RoadLayout.EntryCell, finalPresent);
                 BeginWarriorMotion(w, WarriorMotion.Enter, tile, WarriorQueuePosition,
@@ -463,7 +550,11 @@ namespace Pyatnashki
             }
             if (progress < 1f) return;
             bool finalPresent = finalTile.activeSelf;
-            if (w.Motion == WarriorMotion.Exit && w.Model.TryDeliver(board, finalPresent)) deliveredTotal++;
+            if (w.Motion == WarriorMotion.Exit && w.Model.TryDeliver(board, finalPresent))
+            {
+                deliveredTotal++;
+                if (!diagnosticRound) round.RecordDelivery();
+            }
             w.Motion = WarriorMotion.None;
             w.Cooldown = 0.2f;
             BindWarriorMarker(w);

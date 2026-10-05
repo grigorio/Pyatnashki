@@ -396,3 +396,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   scrambleMoves: 24
   slideDuration: 0.16
+  soldierSupply: 20
+  captureTarget: 12
+  roundTimeSeconds: 120

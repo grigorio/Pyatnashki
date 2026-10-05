@@ -70,6 +70,7 @@ namespace Pyatnashki.Tests
 
         [TestCase(12)]
         [TestCase(16)]
+        [TestCase(20)]
         public void CompleteWavesDeliverAllActorsWithoutExceedingCapacity(int count)
         {
             var ledger = new TileOccupancy();
