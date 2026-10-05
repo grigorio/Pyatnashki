@@ -29,18 +29,18 @@ namespace Pyatnashki.Tests
             var ledger = new TileOccupancy();
             var w = new WarriorSimulation(ledger);
             w.TryEnter(board, true);
-            w.TryMoveTo(board, true, 15);
-            for (int i = 0; i < 14; i++) ledger.TryEnter(14);
+            w.TryMoveTo(board, true, 12);
+            for (int i = 0; i < 8; i++) ledger.TryEnter(8);
             Assert.That(w.GetNextTile(board, true), Is.Zero);
             ledger.TryReserve(1);
             ledger.UpdateCapacityMode(board, true);
-            Assert.That(ledger.GetCount(14), Is.EqualTo(14));
+            Assert.That(ledger.GetCount(8), Is.EqualTo(8));
             Assert.That(ledger.GetReservedCount(1), Is.EqualTo(1));
-            Assert.That(w.GetNextTile(board, true), Is.EqualTo(14));
-            Assert.That(w.ReserveDestination(board, true, 14), Is.True);
-            Assert.That(w.TryMoveTo(board, true, 14), Is.True);
-            Assert.That(ledger.GetCount(14), Is.EqualTo(15));
-            Assert.That(ledger.GetReservedCount(14), Is.Zero);
+            Assert.That(w.GetNextTile(board, true), Is.EqualTo(8));
+            Assert.That(w.ReserveDestination(board, true, 8), Is.True);
+            Assert.That(w.TryMoveTo(board, true, 8), Is.True);
+            Assert.That(ledger.GetCount(8), Is.EqualTo(9));
+            Assert.That(ledger.GetReservedCount(8), Is.Zero);
         }
 
         [Test]
@@ -80,11 +80,11 @@ namespace Pyatnashki.Tests
             var board = new SlidingBoard();
             var warrior = new WarriorSimulation(ledger);
             warrior.TryEnter(board, true);
-            Assert.That(warrior.ReserveDestination(board, true, 15), Is.True);
-            Assert.That(ledger.GetReservedCount(15), Is.EqualTo(1));
+            Assert.That(warrior.ReserveDestination(board, true, 12), Is.True);
+            Assert.That(ledger.GetReservedCount(12), Is.EqualTo(1));
             warrior.CancelReservation();
             Assert.That(warrior.ReservedTile, Is.Zero);
-            Assert.That(ledger.GetReservedCount(15), Is.Zero);
+            Assert.That(ledger.GetReservedCount(12), Is.Zero);
             Assert.That(warrior.CurrentTile, Is.EqualTo(16));
             Assert.That(ledger.GetCount(16), Is.EqualTo(1));
         }
@@ -97,13 +97,13 @@ namespace Pyatnashki.Tests
             var warrior = new WarriorSimulation(ledger);
             warrior.ReserveDestination(board, true, 16);
             Assert.That(warrior.TryEnter(board, true), Is.True);
-            warrior.ReserveDestination(board, true, 15);
-            Assert.That(warrior.TryMoveTo(board, true, 15), Is.True);
-            Assert.That(warrior.TryMoveTo(board, true, 15), Is.False);
+            warrior.ReserveDestination(board, true, 12);
+            Assert.That(warrior.TryMoveTo(board, true, 12), Is.True);
+            Assert.That(warrior.TryMoveTo(board, true, 12), Is.False);
             warrior.CancelReservation();
             Assert.That(ledger.GetCount(16), Is.Zero);
-            Assert.That(ledger.GetCount(15), Is.EqualTo(1));
-            Assert.That(ledger.GetReservedCount(15), Is.Zero);
+            Assert.That(ledger.GetCount(12), Is.EqualTo(1));
+            Assert.That(ledger.GetReservedCount(12), Is.Zero);
         }
 
         [Test]
@@ -115,12 +115,12 @@ namespace Pyatnashki.Tests
             var second = new WarriorSimulation(ledger);
             first.TryEnter(board, true);
             second.TryEnter(board, true);
-            first.ReserveDestination(board, true, 15);
+            first.ReserveDestination(board, true, 12);
             first.Reset();
             Assert.That(ledger.GetCount(16), Is.EqualTo(1));
-            Assert.That(ledger.GetReservedCount(15), Is.Zero);
+            Assert.That(ledger.GetReservedCount(12), Is.Zero);
             Assert.That(second.CurrentTile, Is.EqualTo(16));
-            Assert.That(second.TryMoveTo(board, true, 15), Is.True);
+            Assert.That(second.TryMoveTo(board, true, 12), Is.True);
         }
 
         [TestCase(12)]
@@ -177,11 +177,11 @@ namespace Pyatnashki.Tests
             var ledger = new TileOccupancy();
             var w = new WarriorSimulation(ledger);
             w.TryEnter(board, true);
-            w.TryMoveTo(board, true, 15);
-            for (int i = 0; i < 14; i++) ledger.TryEnter(14);
+            w.TryMoveTo(board, true, 12);
+            for (int i = 0; i < 8; i++) ledger.TryEnter(8);
             Assert.That(w.GetNextTile(board, true), Is.Zero);
-            ledger.Leave(14);
-            Assert.That(w.GetNextTile(board, true), Is.EqualTo(14));
+            ledger.Leave(8);
+            Assert.That(w.GetNextTile(board, true), Is.EqualTo(8));
         }
     }
 }

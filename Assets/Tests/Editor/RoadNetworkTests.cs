@@ -7,6 +7,15 @@ namespace Pyatnashki.Tests
     public class RoadNetworkTests
     {
         [Test]
+        public void EntranceIsBelowBoardAndCastleAbove()
+        {
+            Assert.That(RoadLayout.EntryCell / 4, Is.EqualTo(3));
+            Assert.That(RoadLayout.CastleCell / 4, Is.Zero);
+            Assert.That(RoadLayout.EntryPort, Is.EqualTo(RoadPorts.South));
+            Assert.That(RoadLayout.CastlePort, Is.EqualTo(RoadPorts.North));
+        }
+
+        [Test]
         public void SolvedBoardNeedsFinalTileToOpenEntrance()
         {
             var route = RoadNetwork.Analyze(new SlidingBoard());
@@ -31,9 +40,9 @@ namespace Pyatnashki.Tests
         [Test]
         public void RoadsIncludeStraightsTurnsAndCrossroads()
         {
-            Assert.That(RoadLayout.GetPorts(15), Is.EqualTo(RoadPorts.East | RoadPorts.West));
+            Assert.That(RoadLayout.GetPorts(14), Is.EqualTo(RoadPorts.East | RoadPorts.West));
             Assert.That(RoadLayout.GetPorts(8), Is.EqualTo(RoadPorts.North | RoadPorts.South));
-            Assert.That(RoadLayout.GetPorts(14), Is.EqualTo(RoadPorts.North | RoadPorts.East));
+            Assert.That(RoadLayout.GetPorts(13), Is.EqualTo(RoadPorts.North | RoadPorts.East));
             Assert.That(RoadLayout.GetPorts(11), Is.EqualTo(RoadPorts.All));
         }
 
@@ -63,7 +72,7 @@ namespace Pyatnashki.Tests
         public void MovingTileCarriesItsRoadAndBlankStopsTraversal()
         {
             var board = new SlidingBoard();
-            board.TryMoveTile(15);
+            board.TryMoveTile(12);
             var route = RoadNetwork.Analyze(board);
             Assert.That(route.IsReachable(15), Is.True);
             Assert.That(route.IsReachable(board.EmptyIndex), Is.False);
@@ -71,12 +80,12 @@ namespace Pyatnashki.Tests
             Assert.That(route.HasCastleRoute, Is.False);
             Assert.That(RoadNetwork.Analyze(board, true).ReachableTileCount, Is.EqualTo(1),
                 "The final tile must not appear on an unsolved board.");
-            board.TryMoveTile(14);
+            board.TryMoveTile(8);
             route = RoadNetwork.Analyze(board);
             Assert.That(route.ReachableTileCount, Is.GreaterThan(1));
             Assert.That(route.IsReachable(board.EmptyIndex), Is.False);
-            board.TryMoveTile(14);
-            board.TryMoveTile(15);
+            board.TryMoveTile(8);
+            board.TryMoveTile(12);
             Assert.That(RoadNetwork.Analyze(board, true).HasCastleRoute, Is.True);
         }
 

@@ -15,9 +15,11 @@ namespace Pyatnashki.Domain
     {
         public const int FinalTile = 16;
         public const int EntryCell = 15;
-        public const int CastleCell = 12;
+        public const int CastleCell = 1;
+        public const RoadPorts EntryPort = RoadPorts.South;
+        public const RoadPorts CastlePort = RoadPorts.North;
         private static readonly int[] solution =
-            { 16, 15, 14, 10, 11, 12, 8, 4, 3, 7, 6, 2, 1, 5, 9, 13 };
+            { 16, 12, 8, 4, 3, 7, 11, 15, 14, 13, 9, 10, 6, 5, 1, 2 };
         private static readonly RoadPorts[] ports = BuildPorts();
         public static IReadOnlyList<int> SolutionTileOrder { get; } = Array.AsReadOnly(solution);
 
@@ -34,9 +36,9 @@ namespace Pyatnashki.Domain
             for (int i = 0; i < solution.Length; i++)
             {
                 int tile = solution[i];
-                result[tile] |= i == 0 ? RoadPorts.East : DirectionTo(tile, solution[i - 1]);
+                result[tile] |= i == 0 ? EntryPort : DirectionTo(tile, solution[i - 1]);
                 result[tile] |= i == solution.Length - 1
-                    ? RoadPorts.West : DirectionTo(tile, solution[i + 1]);
+                    ? CastlePort : DirectionTo(tile, solution[i + 1]);
             }
             result[11] = RoadPorts.All;
             return result;
@@ -124,7 +126,7 @@ namespace Pyatnashki.Domain
             for (int i = 0; i < parents.Length; i++) parents[i] = -1;
             var queue = new Queue<int>();
             int count = 0;
-            if ((cellPorts[RoadLayout.EntryCell] & RoadPorts.East) != 0)
+            if ((cellPorts[RoadLayout.EntryCell] & RoadLayout.EntryPort) != 0)
             {
                 reachable[RoadLayout.EntryCell] = true;
                 queue.Enqueue(RoadLayout.EntryCell);
@@ -145,7 +147,7 @@ namespace Pyatnashki.Domain
             }
             var path = new List<int>();
             if (reachable[RoadLayout.CastleCell] &&
-                (cellPorts[RoadLayout.CastleCell] & RoadPorts.West) != 0)
+                (cellPorts[RoadLayout.CastleCell] & RoadLayout.CastlePort) != 0)
             {
                 for (int cell = RoadLayout.CastleCell; cell >= 0; cell = parents[cell]) path.Add(cell);
                 path.Reverse();

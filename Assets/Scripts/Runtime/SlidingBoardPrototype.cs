@@ -56,6 +56,8 @@ namespace Pyatnashki
         private Text movesText, correctText, routeText, statusText, warriorText;
         private Button shuffleButton, practiceButton, sendWarriorButton, carryTestButton, capacityTestButton;
         private bool busy;
+        private int inputVersion;
+        [SerializeField, Range(0.05f, 0.5f)] private float swipeThreshold = 0.15f;
         private enum WarriorMotion { None, Enter, Move, Exit }
         private sealed class WarriorView
         {
@@ -71,6 +73,7 @@ namespace Pyatnashki
 
         private void Awake()
         {
+            if (Application.isMobilePlatform) Screen.orientation = ScreenOrientation.Portrait;
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (EventSystem.current == null)
             {
@@ -116,14 +119,14 @@ namespace Pyatnashki
 
         private void BuildResultOverlay()
         {
-            var overlay = Panel("Round Result", contentRect, Vector2.zero, new Vector2(1500, 840),
+            var overlay = Panel("Round Result", contentRect, Vector2.zero, new Vector2(700, 1400),
                 new Color(0.025f, 0.045f, 0.065f, 0.96f));
             overlay.raycastTarget = true;
             resultOverlay = overlay.gameObject;
             resultTitle = Label("Result Title", overlay.rectTransform, new Vector2(0, 130),
-                new Vector2(1200, 80), "", 43, Gold, FontStyle.Bold);
+                new Vector2(640, 80), "", 34, Gold, FontStyle.Bold);
             resultDetails = Label("Result Details", overlay.rectTransform, new Vector2(0, 5),
-                new Vector2(1000, 150), "", 26, Ink);
+                new Vector2(620, 180), "", 24, Ink);
             MakeButton("Retry", overlay.rectTransform, new Vector2(0, -155),
                 new Vector2(360, 64), "Новий раунд", () => StartRound(scrambleMoves));
             resultOverlay.SetActive(false);
@@ -158,7 +161,7 @@ namespace Pyatnashki
             obj.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = obj.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1600, 900);
+            scaler.referenceResolution = new Vector2(720, 1440);
             scaler.matchWidthOrHeight = 0.5f;
             canvasRect = obj.GetComponent<RectTransform>();
             var background = Panel("Background", canvasRect, Vector2.zero, Vector2.zero,
@@ -167,13 +170,13 @@ namespace Pyatnashki
             background.rectTransform.anchorMax = Vector2.one;
             background.rectTransform.offsetMin = background.rectTransform.offsetMax = Vector2.zero;
             safeRect = MakeRect("Safe Area", canvasRect, Vector2.zero, Vector2.zero);
-            contentRect = MakeRect("Content", safeRect, Vector2.zero, new Vector2(1500, 840));
-            Label("Title", contentRect, new Vector2(0, 385), new Vector2(1100, 60),
-                "П’ЯТНАШКИ · ОБЛОГА", 38, Ink, FontStyle.Bold);
-            Label("Instructions", contentRect, new Vector2(0, 337), new Vector2(1150, 40),
-                "Натискай на плитку поруч із порожньою клітинкою", 23, Muted);
+            contentRect = MakeRect("Content", safeRect, Vector2.zero, new Vector2(700, 1400));
+            Label("Title", contentRect, new Vector2(0, 650), new Vector2(660, 50),
+                "П’ЯТНАШКИ · ОБЛОГА", 34, Ink, FontStyle.Bold);
+            Label("Instructions", contentRect, new Vector2(0, 590), new Vector2(660, 55),
+                "Свайпай плитку до вільної клітинки або торкнися її", 20, Muted);
 
-            boardRect = MakeRect("Board", contentRect, new Vector2(0, -5), new Vector2(592, 592));
+            boardRect = MakeRect("Board", contentRect, new Vector2(0, -70), new Vector2(592, 592));
             Panel("Board Frame", boardRect, Vector2.zero, new Vector2(592, 592),
                 new Color(0.11f, 0.16f, 0.20f));
             for (int i = 0; i < SlidingBoard.CellCount; i++)
@@ -186,7 +189,11 @@ namespace Pyatnashki
             {
                 int number = tile;
                 var button = MakeButton("Tile " + tile, boardRect, Vector2.zero,
-                    new Vector2(132, 132), "", () => RequestMove(number));
+                    new Vector2(132, 132), "", () => { });
+                button.gameObject.AddComponent<TileGestureInput>().Configure(
+                    () => board.GetIndexOf(number), () => board.EmptyIndex, () => inputVersion,
+                    () => !busy && !RoundEnded && !board.IsSolved && board.CanMoveTile(number),
+                    () => RequestMove(number), swipeThreshold);
                 buttons[tile] = button;
                 tiles[tile] = button.GetComponent<RectTransform>();
                 images[tile] = button.GetComponent<Image>();
@@ -208,27 +215,23 @@ namespace Pyatnashki
             reservationTexts[16] = Label("Final Reserved", final.rectTransform, new Vector2(42, -46),
                 new Vector2(40, 24), "", 14, new Color(0.12f, 0.20f, 0.23f));
             finalTile.SetActive(false);
-            Label("Entry Arrow", contentRect, new Vector2(325, -221), new Vector2(60, 44),
-                "←", 36, Gold, FontStyle.Bold);
-            Label("Castle Arrow", contentRect, new Vector2(-325, -221), new Vector2(60, 44),
-                "←", 36, Gold, FontStyle.Bold);
-            Label("Entry Caption", contentRect, new Vector2(540, -235), new Vector2(310, 65),
-                "ВХІД ВОЇНІВ\nБірюзова дорога — доступний шлях\nЧервоний маркер — воїн", 17, Muted);
-            Label("Exit Caption", contentRect, new Vector2(-540, -235), new Vector2(310, 65),
-                "ВИХІД ДО ЗАМКУ\nЗайнято / місткість • +резерв", 18, Muted);
+            Label("Entry Arrow", contentRect, new Vector2(216, -400), new Vector2(44, 44),
+                "↑", 36, Gold, FontStyle.Bold);
+            Label("Entry Caption", contentRect, new Vector2(210, -485), new Vector2(200, 50),
+                "ЧЕРГА ВОЇНІВ\n↑", 18, Muted);
             BuildSidePanels();
-            shuffleButton = MakeButton("Shuffle", contentRect, new Vector2(-150, -346),
-                new Vector2(280, 54), "Нове поле", () => StartRound(scrambleMoves));
-            practiceButton = MakeButton("Practice", contentRect, new Vector2(150, -346),
-                new Vector2(280, 54), "Навчальний режим", () => StartRound(1));
-            sendWarriorButton = MakeButton("Send Warrior", contentRect, new Vector2(540, -309),
-                new Vector2(300, 46), "Наступна хвиля", QueueNextWave);
-            carryTestButton = MakeButton("Carry Test", contentRect, new Vector2(-540, -309),
-                new Vector2(300, 46), "Тест перенесення", () => StartRound(1, true));
-            capacityTestButton = MakeButton("Capacity Test", contentRect, new Vector2(-540, -364),
-                new Vector2(300, 40), "Тест місткості", () => StartRound(1, false, true));
-            statusText = Label("Status", contentRect, new Vector2(0, -405),
-                new Vector2(1360, 28), "", 20, Ink);
+            shuffleButton = MakeButton("Shuffle", contentRect, new Vector2(-170, -555),
+                new Vector2(320, 60), "Нове поле", () => StartRound(scrambleMoves));
+            practiceButton = MakeButton("Practice", contentRect, new Vector2(170, -555),
+                new Vector2(320, 60), "Навчальний режим", () => StartRound(1));
+            sendWarriorButton = MakeButton("Send Warrior", contentRect, new Vector2(-160, -485),
+                new Vector2(320, 48), "Наступна хвиля", QueueNextWave);
+            carryTestButton = MakeButton("Carry Test", contentRect, new Vector2(-170, -625),
+                new Vector2(320, 48), "Тест перенесення", () => StartRound(1, true));
+            capacityTestButton = MakeButton("Capacity Test", contentRect, new Vector2(170, -625),
+                new Vector2(320, 48), "Тест місткості", () => StartRound(1, false, true));
+            statusText = Label("Status", contentRect, new Vector2(0, -680),
+                new Vector2(660, 40), "", 17, Ink);
             BuildResultOverlay();
             FitSafeArea();
         }
@@ -236,36 +239,31 @@ namespace Pyatnashki
         private void BuildSidePanels()
         {
             Color panel = new Color(0.09f, 0.14f, 0.18f);
-            var left = Panel("Castle Panel", contentRect, new Vector2(-540, 10),
-                new Vector2(320, 370), panel);
-            Label("Castle Title", left.rectTransform, new Vector2(0, 135),
-                new Vector2(290, 40), "ЗАМОК", 27, Ink, FontStyle.Bold);
+            var army = Panel("Army Panel", contentRect, new Vector2(-170, 480), new Vector2(320, 160), panel);
+            Label("Army Title", army.rectTransform, new Vector2(0, 60), new Vector2(290, 28),
+                "ВІЙСЬКО", 22, Ink, FontStyle.Bold);
+            warriorText = Label("Warrior State", army.rectTransform, Vector2.zero, new Vector2(300, 94), "", 17, Ink);
+            var progress = Panel("Progress Panel", contentRect, new Vector2(170, 480), new Vector2(320, 160), panel);
+            Label("Progress Title", progress.rectTransform, new Vector2(0, 60), new Vector2(290, 28),
+                "РАУНД", 22, Ink, FontStyle.Bold);
+            timeText = Label("Time", progress.rectTransform, new Vector2(0, 22), new Vector2(290, 30), "", 23, Gold);
+            movesText = Label("Moves", progress.rectTransform, new Vector2(0, -12), new Vector2(290, 28), "", 20, Gold);
+            correctText = Label("Correct Tiles", progress.rectTransform, new Vector2(0, -45), new Vector2(290, 40), "", 17, Ink);
+            Label("Castle Title", contentRect, new Vector2(-72, 380), new Vector2(200, 30), "ЗАМОК", 22, Ink, FontStyle.Bold);
             Color stone = new Color(0.35f, 0.45f, 0.51f);
-            Panel("Castle Body", left.rectTransform, new Vector2(0, 5), new Vector2(140, 100), stone);
-            Panel("Left Tower", left.rectTransform, new Vector2(-83, 23), new Vector2(38, 135), stone);
-            Panel("Right Tower", left.rectTransform, new Vector2(83, 23), new Vector2(38, 135), stone);
-            Panel("Gate", left.rectTransform, new Vector2(0, -26), new Vector2(37, 42), panel);
-            warriorText = Label("Warrior State", left.rectTransform, new Vector2(0, -112),
-                new Vector2(300, 82), "", 17, Ink);
-            var right = Panel("Progress Panel", contentRect, new Vector2(540, 10),
-                new Vector2(320, 370), panel);
-            Label("Progress Title", right.rectTransform, new Vector2(0, 135),
-                new Vector2(290, 40), "ДОШКА", 27, Ink, FontStyle.Bold);
-            timeText = Label("Time", right.rectTransform, new Vector2(0, 95),
-                new Vector2(290, 30), "", 23, Gold, FontStyle.Bold);
-            movesText = Label("Moves", right.rectTransform, new Vector2(0, 50),
-                new Vector2(290, 38), "", 25, Gold, FontStyle.Bold);
-            correctText = Label("Correct Tiles", right.rectTransform, new Vector2(0, -8),
-                new Vector2(290, 52), "", 22, Ink);
-            routeText = Label("Route", right.rectTransform, new Vector2(0, -65),
-                new Vector2(290, 52), "", 20, Ink);
-            goalText = Label("Goal", right.rectTransform, new Vector2(0, -132), new Vector2(290, 58),
-                "Склади 1–15 рядок за рядком.\nДороги рухаються без обертання.", 17, Muted);
+            Panel("Castle Body", contentRect, new Vector2(-72, 300), new Vector2(100, 60), stone);
+            Panel("Left Tower", contentRect, new Vector2(-132, 315), new Vector2(26, 80), stone);
+            Panel("Right Tower", contentRect, new Vector2(-12, 315), new Vector2(26, 80), stone);
+            Panel("Gate", contentRect, new Vector2(-72, 280), new Vector2(22, 28), panel);
+            Label("Castle Arrow", contentRect, new Vector2(-72, 250), new Vector2(44, 44), "↑", 36, Gold);
+            routeText = Label("Route", contentRect, new Vector2(190, 310), new Vector2(260, 70), "", 19, Ink);
+            goalText = Label("Goal", contentRect, new Vector2(-115, -425), new Vector2(390, 72), "", 20, Muted);
         }
 
         private void StartRound(int steps, bool carryTest = false, bool capacityTest = false)
         {
             if (busy) return;
+            inputVersion++;
             diagnosticRound = carryTest || capacityTest;
             capacityStressTest = capacityTest;
             round.Reset();
@@ -282,7 +280,7 @@ namespace Pyatnashki
             if (carryTest || capacityTest)
             {
                 board.ResetSolved();
-                board.TryMoveTile(15);
+                board.TryMoveTile(12);
                 board.ResetMoveCount();
             }
             else board.Shuffle(random, Mathf.Max(1, steps));
@@ -290,9 +288,9 @@ namespace Pyatnashki
             for (int tile = 1; tile < SlidingBoard.CellCount; tile++)
                 tiles[tile].anchoredPosition = CellPosition(board.GetIndexOf(tile));
             statusText.text = capacityTest
-                ? "Плитка 15 вмістить 15 воїнів. Склади дошку — ліміти зникнуть."
+                ? "Плитка 12 вмістить 12 воїнів. Склади дошку — ліміти зникнуть."
                 : carryTest
-                ? "Дочекайся воїнів на плитці 15, потім пересунь її разом із ними."
+                ? "Дочекайся воїнів на плитці 12, потім пересунь її разом із ними."
                 : steps == 1
                 ? "Один правильний хід — і з’явиться завершальна плитка."
                 : "Золоті плитки можна пересунути. Зелені вже на своїх місцях.";
@@ -306,6 +304,7 @@ namespace Pyatnashki
             foreach (WarriorView w in warriors) CancelWarriorMotion(w);
             Vector2 destination = CellPosition(board.EmptyIndex);
             if (!board.TryMoveTile(tile)) return;
+            inputVersion++;
             foreach (WarriorView w in warriors) w.Model.NotifyBoardChanged();
             busy = true;
             foreach (RoadLink link in roadLinks) link.Image.gameObject.SetActive(false);
@@ -355,7 +354,7 @@ namespace Pyatnashki
             RefreshWarriorInterface();
         }
 
-        private Vector2 WarriorQueuePosition => CellPosition(RoadLayout.EntryCell) + new Vector2(144, 0);
+        private Vector2 WarriorQueuePosition => CellPosition(RoadLayout.EntryCell) + new Vector2(0, -144);
 
         private static Vector2 SlotOffset(WarriorView w) => new Vector2(
             (w.Id % 16 % 4 - 1.5f) * 18f, (w.Id % 16 / 4 - 1.5f) * 18f);
@@ -517,7 +516,7 @@ namespace Pyatnashki
             }
             else if (w.Model.CanDeliver(board, finalPresent))
                 BeginWarriorMotion(w, WarriorMotion.Exit, 0, CellPosition(RoadLayout.CastleCell) + SlotOffset(w),
-                    CellPosition(RoadLayout.CastleCell) + new Vector2(-144, 0));
+                    CellPosition(RoadLayout.CastleCell) + new Vector2(0, 144));
             else
             {
                 int nextTile = w.Model.GetNextTile(board, finalPresent);
@@ -657,7 +656,7 @@ namespace Pyatnashki
             safeRect.anchorMax = new Vector2(area.xMax / Screen.width, area.yMax / Screen.height);
             safeRect.offsetMin = safeRect.offsetMax = Vector2.zero;
             Vector2 available = Vector2.Scale(canvasRect.rect.size, safeRect.anchorMax - safeRect.anchorMin);
-            float scale = Mathf.Min(available.x / 1500f, available.y / 840f);
+            float scale = Mathf.Min(available.x / 700f, available.y / 1400f);
             contentRect.localScale = Vector3.one * Mathf.Max(0.01f, scale);
         }
 

@@ -117,7 +117,7 @@ namespace Pyatnashki.Domain
         {
             if (CurrentTile != 0 || Completed) return false;
             int tile = RoadNetwork.GetTileAt(board, RoadLayout.EntryCell, finalTilePresent);
-            return tile != 0 && (RoadLayout.GetPorts(tile) & RoadPorts.East) != 0
+            return tile != 0 && (RoadLayout.GetPorts(tile) & RoadLayout.EntryPort) != 0
                 && (ReservedTile == tile || Occupancy.HasSpace(tile));
         }
 
@@ -143,7 +143,7 @@ namespace Pyatnashki.Domain
         public bool CanDeliver(SlidingBoard board, bool finalTilePresent)
         {
             return CurrentTile != 0 && GetCurrentCell(board, finalTilePresent) == RoadLayout.CastleCell
-                && (RoadLayout.GetPorts(CurrentTile) & RoadPorts.West) != 0;
+                && (RoadLayout.GetPorts(CurrentTile) & RoadLayout.CastlePort) != 0;
         }
 
         public bool TryDeliver(SlidingBoard board, bool finalTilePresent)
@@ -236,7 +236,7 @@ namespace Pyatnashki.Domain
             {
                 int cell = queue.Dequeue();
                 int tile = RoadNetwork.GetTileAt(board, cell, finalTilePresent);
-                if (cell == RoadLayout.CastleCell && (RoadLayout.GetPorts(tile) & RoadPorts.West) != 0)
+                if (cell == RoadLayout.CastleCell && (RoadLayout.GetPorts(tile) & RoadLayout.CastlePort) != 0)
                 {
                     destination = cell;
                     break;

@@ -22,28 +22,28 @@ namespace Pyatnashki.Tests
         public void EnteredDestinationRemainsOwnerWhenThatTileSlides()
         {
             var board = new SlidingBoard();
-            board.TryMoveTile(15);
-            board.TryMoveTile(14);
+            board.TryMoveTile(12);
+            board.TryMoveTile(8);
             var warrior = new WarriorSimulation();
             warrior.TryEnter(board, false);
-            Assert.That(warrior.TryMoveTo(board, false, 14), Is.True);
-            board.TryMoveTile(14);
+            Assert.That(warrior.TryMoveTo(board, false, 8), Is.True);
+            board.TryMoveTile(8);
             warrior.NotifyBoardChanged();
-            Assert.That(warrior.CurrentTile, Is.EqualTo(14));
-            Assert.That(warrior.GetCurrentCell(board, false), Is.EqualTo(13));
-            Assert.That(warrior.Occupancy.GetCount(14), Is.EqualTo(1));
-            Assert.That(warrior.Occupancy.GetCount(15), Is.Zero);
+            Assert.That(warrior.CurrentTile, Is.EqualTo(8));
+            Assert.That(warrior.GetCurrentCell(board, false), Is.EqualTo(7));
+            Assert.That(warrior.Occupancy.GetCount(8), Is.EqualTo(1));
+            Assert.That(warrior.Occupancy.GetCount(12), Is.Zero);
         }
 
         [Test]
-        public void EntranceRequiresTileFacingRightAndAvailableSpace()
+        public void EntranceRequiresTileFacingDownAndAvailableSpace()
         {
             var board = new SlidingBoard();
             var warrior = new WarriorSimulation();
             Assert.That(warrior.TryEnter(board, false), Is.False);
-            board.TryMoveTile(12);
+            board.TryMoveTile(15);
             Assert.That(warrior.TryEnter(board, false), Is.False);
-            board.TryMoveTile(12);
+            board.TryMoveTile(15);
             Assert.That(warrior.TryEnter(board, true), Is.True);
             Assert.That(warrior.CurrentTile, Is.EqualTo(16));
             Assert.That(warrior.TryEnter(board, true), Is.False);
@@ -77,32 +77,32 @@ namespace Pyatnashki.Tests
         public void WarriorWaitsAtBlankAndContinuesAfterRoadOpens()
         {
             var board = new SlidingBoard();
-            board.TryMoveTile(15);
+            board.TryMoveTile(12);
             var warrior = new WarriorSimulation();
             Assert.That(warrior.TryEnter(board, false), Is.True);
             Assert.That(warrior.GetNextTile(board, false), Is.Zero);
             Assert.That(warrior.TryDeliver(board, false), Is.False);
-            board.TryMoveTile(14);
+            board.TryMoveTile(8);
             warrior.NotifyBoardChanged();
-            Assert.That(warrior.GetNextTile(board, false), Is.EqualTo(14));
-            Assert.That(warrior.TryMoveTo(board, false, 14), Is.True);
+            Assert.That(warrior.GetNextTile(board, false), Is.EqualTo(8));
+            Assert.That(warrior.TryMoveTo(board, false, 8), Is.True);
         }
 
         [Test]
         public void SlidingOccupiedTilePreservesOwnerAndOccupancy()
         {
             var board = new SlidingBoard();
-            board.TryMoveTile(15);
+            board.TryMoveTile(12);
             var warrior = new WarriorSimulation();
             warrior.TryEnter(board, false);
             Assert.That(warrior.GetCurrentCell(board, false), Is.EqualTo(15));
-            board.TryMoveTile(15);
+            board.TryMoveTile(12);
             warrior.NotifyBoardChanged();
-            Assert.That(warrior.CurrentTile, Is.EqualTo(15));
-            Assert.That(warrior.GetCurrentCell(board, false), Is.EqualTo(14));
-            Assert.That(warrior.Occupancy.GetCount(15), Is.EqualTo(1));
+            Assert.That(warrior.CurrentTile, Is.EqualTo(12));
+            Assert.That(warrior.GetCurrentCell(board, false), Is.EqualTo(11));
+            Assert.That(warrior.Occupancy.GetCount(12), Is.EqualTo(1));
             Assert.That(RoadNetwork.Analyze(board, false).ReachableTileCount, Is.Zero);
-            Assert.That(warrior.GetNextTile(board, false), Is.EqualTo(14),
+            Assert.That(warrior.GetNextTile(board, false), Is.EqualTo(8),
                 "Routing must start at the warrior, even when the entrance is disconnected.");
         }
 
@@ -110,18 +110,18 @@ namespace Pyatnashki.Tests
         public void StaleTransitionCannotCrossNewBlank()
         {
             var board = new SlidingBoard();
-            board.TryMoveTile(15);
-            board.TryMoveTile(14);
+            board.TryMoveTile(12);
+            board.TryMoveTile(8);
             var warrior = new WarriorSimulation();
             warrior.TryEnter(board, false);
             int planned = warrior.GetNextTile(board, false);
-            Assert.That(planned, Is.EqualTo(14));
-            board.TryMoveTile(14);
+            Assert.That(planned, Is.EqualTo(8));
+            board.TryMoveTile(8);
             warrior.NotifyBoardChanged();
             Assert.That(warrior.TryMoveTo(board, false, planned), Is.False);
-            Assert.That(warrior.CurrentTile, Is.EqualTo(15));
-            Assert.That(warrior.Occupancy.GetCount(15), Is.EqualTo(1));
-            Assert.That(warrior.Occupancy.GetCount(14), Is.Zero);
+            Assert.That(warrior.CurrentTile, Is.EqualTo(12));
+            Assert.That(warrior.Occupancy.GetCount(12), Is.EqualTo(1));
+            Assert.That(warrior.Occupancy.GetCount(8), Is.Zero);
         }
 
         [Test]
@@ -130,22 +130,22 @@ namespace Pyatnashki.Tests
             var board = new SlidingBoard();
             var warrior = new WarriorSimulation();
             warrior.TryEnter(board, true);
-            for (int i = 0; i < 15; i++) Assert.That(warrior.Occupancy.TryEnter(15), Is.True);
+            for (int i = 0; i < 12; i++) Assert.That(warrior.Occupancy.TryEnter(12), Is.True);
             Assert.That(warrior.GetNextTile(board, true), Is.Zero);
-            Assert.That(warrior.TryMoveTo(board, true, 15), Is.False);
+            Assert.That(warrior.TryMoveTo(board, true, 12), Is.False);
             Assert.That(warrior.Occupancy.GetCount(16), Is.EqualTo(1));
-            warrior.Occupancy.Leave(15);
-            Assert.That(warrior.GetNextTile(board, true), Is.EqualTo(15));
-            Assert.That(warrior.TryMoveTo(board, true, 15), Is.True);
-            Assert.That(warrior.Occupancy.GetCount(15), Is.EqualTo(15));
+            warrior.Occupancy.Leave(12);
+            Assert.That(warrior.GetNextTile(board, true), Is.EqualTo(12));
+            Assert.That(warrior.TryMoveTo(board, true, 12), Is.True);
+            Assert.That(warrior.Occupancy.GetCount(12), Is.EqualTo(12));
         }
 
         [Test]
         public void PartialExplorationEventuallyStopsInsteadOfBouncingForever()
         {
             var board = new SlidingBoard();
-            board.TryMoveTile(15);
-            board.TryMoveTile(14);
+            board.TryMoveTile(12);
+            board.TryMoveTile(8);
             var warrior = new WarriorSimulation();
             warrior.TryEnter(board, false);
             int steps = 0, next;
@@ -202,7 +202,7 @@ namespace Pyatnashki.Tests
             var board = new SlidingBoard();
             var warrior = new WarriorSimulation();
             warrior.TryEnter(board, true);
-            foreach (int tile in new[] { -1, 0, 12, 13, 16, 17 })
+            foreach (int tile in new[] { -1, 0, 15, 13, 16, 17 })
                 Assert.That(warrior.TryMoveTo(board, true, tile), Is.False);
             Assert.That(warrior.CurrentTile, Is.EqualTo(16));
             Assert.That(warrior.Occupancy.GetCount(16), Is.EqualTo(1));
