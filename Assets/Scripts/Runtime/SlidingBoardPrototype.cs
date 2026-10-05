@@ -240,6 +240,50 @@ namespace Pyatnashki
         private void OnApplicationPause(bool paused) { if (paused) SaveEconomy(); }
         private void OnApplicationQuit() => SaveEconomy();
 
+#if UNITY_EDITOR
+        [ContextMenu("Economy debug/Add 5000 gold")]
+        private void DebugAddGold()
+        {
+            if (!Application.isPlaying || economy == null)
+            {
+                Debug.Log("Start Play mode before testing the economy.", this);
+                return;
+            }
+            economy.Advance(UtcSeconds());
+            KingdomSave saved = economy.Export();
+            saved.gold = checked(saved.gold + 5000);
+            ApplyDebugEconomy(saved);
+            Debug.Log("Added 5000 test gold. Treasury: " + economy.Gold, this);
+        }
+
+        [ContextMenu("Economy debug/Accrue 1 hour tribute")]
+        private void DebugAccrueTribute()
+        {
+            if (!Application.isPlaying || economy == null)
+            {
+                Debug.Log("Start Play mode before testing the economy.", this);
+                return;
+            }
+            economy.Advance(UtcSeconds());
+            KingdomSave before = economy.Export();
+            var simulated = new KingdomEconomy(SettlementDefinitions(), before.lastUtcSeconds, before);
+            simulated.Advance(checked(before.lastUtcSeconds + 3600));
+            KingdomSave after = simulated.Export();
+            // Keep the real timestamp: test time must not suppress subsequent normal income.
+            after.lastUtcSeconds = before.lastUtcSeconds;
+            ApplyDebugEconomy(after);
+            Debug.Log("Accrued one test hour of tribute, subject to ownership and storage caps. Collectable: "
+                + economy.Collectable, this);
+        }
+
+        private void ApplyDebugEconomy(KingdomSave saved)
+        {
+            economy = new KingdomEconomy(SettlementDefinitions(), UtcSeconds(), saved);
+            SaveEconomy();
+            if (kingdomView != null) kingdomView.SetEconomy(economy);
+        }
+#endif
+
         private void ShowKingdom()
         {
             if (busy) return;
