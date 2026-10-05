@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Pyatnashki.Domain;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -7,7 +8,7 @@ using UnityEngine.UI;
 
 namespace Pyatnashki
 {
-    /// <summary>Stage one: UI built at runtime by the component in SampleScene.</summary>
+    /// <summary>Sliding board and road preview built at runtime in SampleScene.</summary>
     public sealed class SlidingBoardPrototype : MonoBehaviour
     {
         [SerializeField, Min(1)] private int scrambleMoves = 24;
@@ -20,10 +21,18 @@ namespace Pyatnashki
         private readonly RectTransform[] tiles = new RectTransform[SlidingBoard.CellCount];
         private readonly Button[] buttons = new Button[SlidingBoard.CellCount];
         private readonly Image[] images = new Image[SlidingBoard.CellCount];
+        private readonly List<Image>[] roads = new List<Image>[RoadLayout.FinalTile + 1];
+        private readonly List<RoadLink> roadLinks = new List<RoadLink>();
+        private sealed class RoadLink
+        {
+            public int Cell, Next;
+            public RoadPorts Direction;
+            public Image Image;
+        }
         private RectTransform canvasRect, safeRect, contentRect, boardRect, emptyMarker;
         private GameObject finalTile;
         private Font font;
-        private Text movesText, correctText, statusText;
+        private Text movesText, correctText, routeText, statusText;
         private Button shuffleButton, practiceButton;
         private bool busy;
 
@@ -71,6 +80,7 @@ namespace Pyatnashki
             for (int i = 0; i < SlidingBoard.CellCount; i++)
                 Panel("Cell " + i, boardRect, CellPosition(i), new Vector2(132, 132),
                     new Color(0.075f, 0.12f, 0.16f));
+            BuildRoadLinks();
             emptyMarker = Label("Empty Cell", boardRect, Vector2.zero, new Vector2(130, 70),
                 "ВІЛЬНО", 17, Muted).rectTransform;
             for (int tile = 1; tile < SlidingBoard.CellCount; tile++)
@@ -81,18 +91,26 @@ namespace Pyatnashki
                 buttons[tile] = button;
                 tiles[tile] = button.GetComponent<RectTransform>();
                 images[tile] = button.GetComponent<Image>();
-                Label("Number", tiles[tile], new Vector2(0, 12), new Vector2(125, 70),
-                    tile.ToString(), 46, new Color(0.08f, 0.12f, 0.15f), FontStyle.Bold);
-                Label("Capacity", tiles[tile], new Vector2(0, -40), new Vector2(125, 26),
-                    "Місткість: " + tile, 15, new Color(0.12f, 0.20f, 0.23f));
+                BuildRoad(tile, tiles[tile]);
+                Label("Number", tiles[tile], new Vector2(-43, 43), new Vector2(42, 34),
+                    tile.ToString(), 28, new Color(0.08f, 0.12f, 0.15f), FontStyle.Bold);
+                Label("Capacity", tiles[tile], new Vector2(-40, -46), new Vector2(56, 24),
+                    "≤ " + tile, 17, new Color(0.12f, 0.20f, 0.23f));
             }
             var final = Panel("Final Tile", boardRect, CellPosition(15), new Vector2(132, 132), Gold);
             finalTile = final.gameObject;
-            Panel("Final Road", final.rectTransform, Vector2.zero, new Vector2(132, 22),
-                new Color(0.28f, 0.22f, 0.13f));
+            BuildRoad(RoadLayout.FinalTile, final.rectTransform);
             Label("Final Label", final.rectTransform, new Vector2(0, 38), new Vector2(125, 30),
                 "ФІНІШ", 18, new Color(0.10f, 0.14f, 0.16f), FontStyle.Bold);
             finalTile.SetActive(false);
+            Label("Entry Arrow", contentRect, new Vector2(325, -221), new Vector2(60, 44),
+                "←", 36, Gold, FontStyle.Bold);
+            Label("Castle Arrow", contentRect, new Vector2(-325, -221), new Vector2(60, 44),
+                "←", 36, Gold, FontStyle.Bold);
+            Label("Entry Caption", contentRect, new Vector2(540, -235), new Vector2(310, 65),
+                "ВХІД ВОЇНІВ\nБірюзова дорога — доступний шлях", 18, Muted);
+            Label("Exit Caption", contentRect, new Vector2(-540, -235), new Vector2(310, 65),
+                "ВИХІД ДО ЗАМКУ\n≤ число — місткість плитки", 18, Muted);
             BuildSidePanels();
             shuffleButton = MakeButton("Shuffle", contentRect, new Vector2(-150, -346),
                 new Vector2(280, 54), "Нове поле", () => StartRound(scrambleMoves));
@@ -125,8 +143,10 @@ namespace Pyatnashki
                 new Vector2(290, 45), "", 27, Gold, FontStyle.Bold);
             correctText = Label("Correct Tiles", right.rectTransform, Vector2.zero,
                 new Vector2(290, 65), "", 23, Ink);
-            Label("Goal", right.rectTransform, new Vector2(0, -105), new Vector2(290, 90),
-                "Склади числа 1–15\nзліва направо,\nрядок за рядком", 21, Muted);
+            routeText = Label("Route", right.rectTransform, new Vector2(0, -65),
+                new Vector2(290, 52), "", 20, Ink);
+            Label("Goal", right.rectTransform, new Vector2(0, -132), new Vector2(290, 58),
+                "Склади 1–15 рядок за рядком.\nДороги рухаються без обертання.", 17, Muted);
         }
 
         private void StartRound(int steps)
@@ -148,7 +168,8 @@ namespace Pyatnashki
             Vector2 destination = CellPosition(board.EmptyIndex);
             if (!board.TryMoveTile(tile)) return;
             busy = true;
-            RefreshInterface();
+            foreach (RoadLink link in roadLinks) link.Image.gameObject.SetActive(false);
+            RefreshInterface(false);
             StartCoroutine(AnimateMove(tile, destination));
         }
 
@@ -169,12 +190,12 @@ namespace Pyatnashki
             if (board.IsSolved)
             {
                 finalTile.SetActive(true);
-                statusText.text = "Дошку складено! Завершальна плитка заповнила вільну клітинку.";
+                statusText.text = "Дошку складено! Завершальна плитка відкрила маршрут до замку.";
             }
             RefreshInterface();
         }
 
-        private void RefreshInterface()
+        private void RefreshInterface(bool updateRoads = true)
         {
             movesText.text = "Ходи: " + board.MoveCount;
             correctText.text = "На своїх місцях\n" + board.CorrectTileCount + " / 15";
@@ -188,6 +209,72 @@ namespace Pyatnashki
                 images[tile].color = movable ? Gold : board.GetIndexOf(tile) == tile - 1
                     ? new Color(0.45f, 0.72f, 0.61f) : new Color(0.70f, 0.76f, 0.78f);
             }
+            if (updateRoads) RefreshRoads();
+        }
+
+        private void BuildRoad(int tile, RectTransform parent)
+        {
+            roads[tile] = new List<Image>();
+            Color dark = new Color(0.15f, 0.24f, 0.28f);
+            roads[tile].Add(Panel("Road Centre", parent, Vector2.zero, new Vector2(16, 16), dark));
+            RoadPorts ports = RoadLayout.GetPorts(tile);
+            foreach (RoadPorts direction in new[] { RoadPorts.North, RoadPorts.East,
+                RoadPorts.South, RoadPorts.West })
+            {
+                if ((ports & direction) == 0) continue;
+                bool vertical = direction == RoadPorts.North || direction == RoadPorts.South;
+                Vector2 position = direction == RoadPorts.North ? new Vector2(0, 33)
+                    : direction == RoadPorts.South ? new Vector2(0, -33)
+                    : direction == RoadPorts.East ? new Vector2(33, 0) : new Vector2(-33, 0);
+                roads[tile].Add(Panel("Road " + direction, parent, position,
+                    vertical ? new Vector2(16, 66) : new Vector2(66, 16), dark));
+            }
+        }
+
+        private void BuildRoadLinks()
+        {
+            for (int cell = 0; cell < SlidingBoard.CellCount; cell++)
+                foreach (RoadPorts direction in new[] { RoadPorts.East, RoadPorts.South })
+                {
+                    if (!RoadNetwork.TryGetNeighbor(cell, direction, out int next)) continue;
+                    Vector2 midpoint = (CellPosition(cell) + CellPosition(next)) * 0.5f;
+                    var image = Panel("Connection " + cell + " to " + next, boardRect,
+                        midpoint, direction == RoadPorts.East ? new Vector2(12, 16)
+                            : new Vector2(16, 12), Color.white);
+                    image.gameObject.SetActive(false);
+                    roadLinks.Add(new RoadLink { Cell = cell, Next = next,
+                        Direction = direction, Image = image });
+                }
+        }
+
+        private RoadPorts PortsAtCell(int cell)
+        {
+            int tile = board.GetTile(cell);
+            if (tile == 0 && finalTile.activeSelf && board.IsSolved) tile = RoadLayout.FinalTile;
+            return tile == 0 ? RoadPorts.None : RoadLayout.GetPorts(tile);
+        }
+
+        private void RefreshRoads()
+        {
+            RoadNetworkResult route = RoadNetwork.Analyze(board, finalTile.activeSelf);
+            Color connected = new Color(0.04f, 0.48f, 0.51f);
+            Color disconnected = new Color(0.15f, 0.24f, 0.28f);
+            for (int tile = 1; tile <= RoadLayout.FinalTile; tile++)
+            {
+                int cell = tile == RoadLayout.FinalTile ? board.EmptyIndex : board.GetIndexOf(tile);
+                Color color = route.IsReachable(cell) ? connected : disconnected;
+                foreach (Image road in roads[tile]) road.color = color;
+            }
+            foreach (RoadLink link in roadLinks)
+            {
+                bool joined = RoadNetwork.AreConnected(PortsAtCell(link.Cell),
+                    PortsAtCell(link.Next), link.Direction);
+                link.Image.gameObject.SetActive(joined);
+                link.Image.color = route.IsReachable(link.Cell) ? connected : disconnected;
+            }
+            routeText.text = "Доступні плитки: " + route.ReachableTileCount + " / 16\n"
+                + (route.HasCastleRoute ? "Шлях до замку відкрито" : "Шлях до замку розірвано");
+            routeText.color = route.HasCastleRoute ? new Color(0.35f, 0.87f, 0.77f) : Ink;
         }
 
         private void FitSafeArea()
