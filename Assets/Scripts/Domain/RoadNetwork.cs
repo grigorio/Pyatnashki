@@ -78,6 +78,13 @@ namespace Pyatnashki.Domain
         private static readonly RoadPorts[] directions =
             { RoadPorts.North, RoadPorts.East, RoadPorts.South, RoadPorts.West };
 
+        public static int GetTileAt(SlidingBoard board, int cell, bool finalTilePresent = false)
+        {
+            if (board == null) throw new ArgumentNullException(nameof(board));
+            int tile = board.GetTile(cell);
+            return tile == 0 && finalTilePresent && board.IsSolved ? RoadLayout.FinalTile : tile;
+        }
+
         public static bool AreConnected(RoadPorts from, RoadPorts to, RoadPorts direction)
         {
             RoadPorts opposite = Opposite(direction);
@@ -109,8 +116,7 @@ namespace Pyatnashki.Domain
             var cellPorts = new RoadPorts[SlidingBoard.CellCount];
             for (int cell = 0; cell < cellPorts.Length; cell++)
             {
-                int tile = board.GetTile(cell);
-                if (tile == 0 && finalTilePresent && board.IsSolved) tile = RoadLayout.FinalTile;
+                int tile = GetTileAt(board, cell, finalTilePresent);
                 cellPorts[cell] = tile == 0 ? RoadPorts.None : RoadLayout.GetPorts(tile);
             }
             var reachable = new bool[SlidingBoard.CellCount];

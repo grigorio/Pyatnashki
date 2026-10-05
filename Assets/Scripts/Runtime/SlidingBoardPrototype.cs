@@ -13,10 +13,12 @@ namespace Pyatnashki
     {
         [SerializeField, Min(1)] private int scrambleMoves = 24;
         [SerializeField, Min(0.01f)] private float slideDuration = 0.16f;
+        [SerializeField, Min(0.05f)] private float warriorStepDuration = 0.6f;
         private static readonly Color Ink = new Color(0.91f, 0.94f, 0.96f);
         private static readonly Color Muted = new Color(0.60f, 0.68f, 0.73f);
         private static readonly Color Gold = new Color(0.97f, 0.73f, 0.31f);
         private readonly SlidingBoard board = new SlidingBoard();
+        private readonly WarriorSimulation warrior = new WarriorSimulation();
         private readonly System.Random random = new System.Random();
         private readonly RectTransform[] tiles = new RectTransform[SlidingBoard.CellCount];
         private readonly Button[] buttons = new Button[SlidingBoard.CellCount];
@@ -29,12 +31,17 @@ namespace Pyatnashki
             public RoadPorts Direction;
             public Image Image;
         }
-        private RectTransform canvasRect, safeRect, contentRect, boardRect, emptyMarker;
+        private RectTransform canvasRect, safeRect, contentRect, boardRect, emptyMarker, warriorMarker;
         private GameObject finalTile;
         private Font font;
-        private Text movesText, correctText, routeText, statusText;
-        private Button shuffleButton, practiceButton;
+        private Text movesText, correctText, routeText, statusText, warriorText;
+        private Button shuffleButton, practiceButton, sendWarriorButton, carryTestButton;
         private bool busy;
+        private enum WarriorMotion { None, Enter, Move, Exit }
+        private WarriorMotion warriorMotion;
+        private Vector2 warriorStart, warriorEnd;
+        private float warriorElapsed, warriorCooldown;
+        private int warriorDestination;
 
         private void Awake()
         {
@@ -47,6 +54,17 @@ namespace Pyatnashki
             }
             BuildInterface();
             StartRound(scrambleMoves);
+        }
+
+        private void Update()
+        {
+            if (!busy)
+            {
+                if (warriorMotion != WarriorMotion.None) AdvanceWarriorMotion();
+                else if (warriorCooldown > 0f) warriorCooldown -= Time.unscaledDeltaTime;
+                else PlanWarriorMotion();
+            }
+            RefreshWarriorInterface();
         }
 
         private void LateUpdate() => FitSafeArea();
@@ -108,7 +126,7 @@ namespace Pyatnashki
             Label("Castle Arrow", contentRect, new Vector2(-325, -221), new Vector2(60, 44),
                 "←", 36, Gold, FontStyle.Bold);
             Label("Entry Caption", contentRect, new Vector2(540, -235), new Vector2(310, 65),
-                "ВХІД ВОЇНІВ\nБірюзова дорога — доступний шлях", 18, Muted);
+                "ВХІД ВОЇНІВ\nБірюзова дорога — доступний шлях\nЧервоний маркер — воїн", 17, Muted);
             Label("Exit Caption", contentRect, new Vector2(-540, -235), new Vector2(310, 65),
                 "ВИХІД ДО ЗАМКУ\n≤ число — місткість плитки", 18, Muted);
             BuildSidePanels();
@@ -116,8 +134,15 @@ namespace Pyatnashki
                 new Vector2(280, 54), "Нове поле", () => StartRound(scrambleMoves));
             practiceButton = MakeButton("Practice", contentRect, new Vector2(150, -346),
                 new Vector2(280, 54), "Навчальний режим", () => StartRound(1));
+            sendWarriorButton = MakeButton("Send Warrior", contentRect, new Vector2(540, -309),
+                new Vector2(300, 46), "Ще один воїн", QueueNextWarrior);
+            carryTestButton = MakeButton("Carry Test", contentRect, new Vector2(-540, -309),
+                new Vector2(300, 46), "Тест перенесення", () => StartRound(1, true));
             statusText = Label("Status", contentRect, new Vector2(0, -399),
                 new Vector2(1360, 40), "", 21, Ink);
+            warriorMarker = Panel("Warrior", boardRect, Vector2.zero, new Vector2(32, 32),
+                new Color(0.88f, 0.16f, 0.18f)).rectTransform;
+            Panel("Warrior Centre", warriorMarker, Vector2.zero, new Vector2(10, 10), Color.white);
             FitSafeArea();
         }
 
@@ -133,8 +158,8 @@ namespace Pyatnashki
             Panel("Left Tower", left.rectTransform, new Vector2(-83, 23), new Vector2(38, 135), stone);
             Panel("Right Tower", left.rectTransform, new Vector2(83, 23), new Vector2(38, 135), stone);
             Panel("Gate", left.rectTransform, new Vector2(0, -26), new Vector2(37, 42), panel);
-            Label("Castle Caption", left.rectTransform, new Vector2(0, -105),
-                new Vector2(290, 60), "Напрямок наступу\n←", 23, Muted);
+            warriorText = Label("Warrior State", left.rectTransform, new Vector2(0, -112),
+                new Vector2(300, 82), "", 18, Ink);
             var right = Panel("Progress Panel", contentRect, new Vector2(540, 10),
                 new Vector2(320, 370), panel);
             Label("Progress Title", right.rectTransform, new Vector2(0, 135),
@@ -149,24 +174,38 @@ namespace Pyatnashki
                 "Склади 1–15 рядок за рядком.\nДороги рухаються без обертання.", 17, Muted);
         }
 
-        private void StartRound(int steps)
+        private void StartRound(int steps, bool carryTest = false)
         {
             if (busy) return;
-            board.Shuffle(random, Mathf.Max(1, steps));
+            warriorMotion = WarriorMotion.None;
+            warriorCooldown = 0.25f;
+            warrior.Reset();
+            if (carryTest)
+            {
+                board.ResetSolved();
+                board.TryMoveTile(15);
+                board.ResetMoveCount();
+            }
+            else board.Shuffle(random, Mathf.Max(1, steps));
             finalTile.SetActive(false);
             for (int tile = 1; tile < SlidingBoard.CellCount; tile++)
                 tiles[tile].anchoredPosition = CellPosition(board.GetIndexOf(tile));
-            statusText.text = steps == 1
+            statusText.text = carryTest
+                ? "Дочекайся воїна на плитці 15, потім пересунь її разом із ним."
+                : steps == 1
                 ? "Один правильний хід — і з’явиться завершальна плитка."
                 : "Золоті плитки можна пересунути. Зелені вже на своїх місцях.";
+            BindWarriorMarker();
             RefreshInterface();
         }
 
         private void RequestMove(int tile)
         {
             if (busy || board.IsSolved || !board.CanMoveTile(tile)) return;
+            CancelWarriorMotion();
             Vector2 destination = CellPosition(board.EmptyIndex);
             if (!board.TryMoveTile(tile)) return;
+            warrior.NotifyBoardChanged();
             busy = true;
             foreach (RoadLink link in roadLinks) link.Image.gameObject.SetActive(false);
             RefreshInterface(false);
@@ -202,6 +241,7 @@ namespace Pyatnashki
             emptyMarker.anchoredPosition = CellPosition(board.EmptyIndex);
             emptyMarker.gameObject.SetActive(!board.IsSolved);
             shuffleButton.interactable = practiceButton.interactable = !busy;
+            carryTestButton.interactable = !busy;
             for (int tile = 1; tile < SlidingBoard.CellCount; tile++)
             {
                 bool movable = !busy && !board.IsSolved && board.CanMoveTile(tile);
@@ -210,6 +250,104 @@ namespace Pyatnashki
                     ? new Color(0.45f, 0.72f, 0.61f) : new Color(0.70f, 0.76f, 0.78f);
             }
             if (updateRoads) RefreshRoads();
+            RefreshWarriorInterface();
+        }
+
+        private Vector2 WarriorQueuePosition => CellPosition(RoadLayout.EntryCell) + new Vector2(144, 0);
+
+        private RectTransform TileTransform(int tile) => tile == RoadLayout.FinalTile
+            ? finalTile.GetComponent<RectTransform>() : tiles[tile];
+
+        private int TileCell(int tile) => tile == RoadLayout.FinalTile
+            ? board.EmptyIndex : board.GetIndexOf(tile);
+
+        private void BindWarriorMarker()
+        {
+            warriorMarker.gameObject.SetActive(!warrior.Completed);
+            warriorMarker.SetParent(warrior.CurrentTile == 0 ? boardRect
+                : TileTransform(warrior.CurrentTile), false);
+            warriorMarker.anchoredPosition = warrior.CurrentTile == 0 ? WarriorQueuePosition : Vector2.zero;
+            warriorMarker.SetAsLastSibling();
+        }
+
+        private void CancelWarriorMotion()
+        {
+            warriorMotion = WarriorMotion.None;
+            warriorCooldown = 0.2f;
+            BindWarriorMarker();
+        }
+
+        private void QueueNextWarrior()
+        {
+            if (busy || !warrior.QueueNext()) return;
+            warriorCooldown = 0.2f;
+            BindWarriorMarker();
+            RefreshWarriorInterface();
+        }
+
+        private void PlanWarriorMotion()
+        {
+            if (warrior.Completed) return;
+            bool finalPresent = finalTile.activeSelf;
+            if (warrior.CurrentTile == 0)
+            {
+                if (!warrior.CanEnter(board, finalPresent)) return;
+                int tile = RoadNetwork.GetTileAt(board, RoadLayout.EntryCell, finalPresent);
+                BeginWarriorMotion(WarriorMotion.Enter, tile, WarriorQueuePosition,
+                    CellPosition(RoadLayout.EntryCell));
+            }
+            else if (warrior.CanDeliver(board, finalPresent))
+                BeginWarriorMotion(WarriorMotion.Exit, 0, CellPosition(RoadLayout.CastleCell),
+                    CellPosition(RoadLayout.CastleCell) + new Vector2(-144, 0));
+            else
+            {
+                int nextTile = warrior.GetNextTile(board, finalPresent);
+                if (nextTile == 0) return;
+                BeginWarriorMotion(WarriorMotion.Move, nextTile,
+                    CellPosition(TileCell(warrior.CurrentTile)), CellPosition(TileCell(nextTile)));
+            }
+        }
+
+        private void BeginWarriorMotion(WarriorMotion motion, int destination, Vector2 start, Vector2 end)
+        {
+            warriorMotion = motion;
+            warriorDestination = destination;
+            warriorStart = start;
+            warriorEnd = end;
+            warriorElapsed = 0f;
+            warriorMarker.SetParent(boardRect, false);
+            warriorMarker.SetAsLastSibling();
+            warriorMarker.anchoredPosition = start;
+        }
+
+        private void AdvanceWarriorMotion()
+        {
+            warriorElapsed += Time.unscaledDeltaTime;
+            float progress = Mathf.Clamp01(warriorElapsed / Mathf.Max(0.05f, warriorStepDuration));
+            warriorMarker.anchoredPosition = Vector2.Lerp(warriorStart, warriorEnd, progress);
+            if (progress < 1f) return;
+            bool finalPresent = finalTile.activeSelf;
+            switch (warriorMotion)
+            {
+                case WarriorMotion.Enter: warrior.TryEnter(board, finalPresent); break;
+                case WarriorMotion.Move: warrior.TryMoveTo(board, finalPresent, warriorDestination); break;
+                case WarriorMotion.Exit: warrior.TryDeliver(board, finalPresent); break;
+            }
+            warriorMotion = WarriorMotion.None;
+            warriorCooldown = 0.2f;
+            BindWarriorMarker();
+        }
+
+        private void RefreshWarriorInterface()
+        {
+            sendWarriorButton.interactable = !busy && warrior.Completed;
+            string state = warrior.Completed ? "Воїн дістався замку"
+                : busy ? "Пересування дошки"
+                : warriorMotion != WarriorMotion.None ? "Воїн рухається"
+                : warrior.CurrentTile == 0 ? "Очікує входу справа" : "Очікує продовження шляху";
+            warriorText.text = "Доставлено: " + warrior.DeliveredCount + "\n"
+                + (warrior.CurrentTile == 0 ? "На вході: " + (warrior.Completed ? 0 : 1)
+                    : "Воїн на плитці: " + warrior.CurrentTile) + "\n" + state;
         }
 
         private void BuildRoad(int tile, RectTransform parent)
@@ -249,8 +387,7 @@ namespace Pyatnashki
 
         private RoadPorts PortsAtCell(int cell)
         {
-            int tile = board.GetTile(cell);
-            if (tile == 0 && finalTile.activeSelf && board.IsSolved) tile = RoadLayout.FinalTile;
+            int tile = RoadNetwork.GetTileAt(board, cell, finalTile.activeSelf);
             return tile == 0 ? RoadPorts.None : RoadLayout.GetPorts(tile);
         }
 

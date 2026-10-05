@@ -23,6 +23,8 @@ namespace Pyatnashki.Domain
 
         public int GetIndexOf(int tile) => Array.IndexOf(cells, tile);
 
+        public void ResetMoveCount() => MoveCount = 0;
+
         public bool IsSolved
         {
             get
