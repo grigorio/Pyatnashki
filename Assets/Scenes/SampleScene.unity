@@ -395,6 +395,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slideDuration: 0.16
+  commanderChance: 0.08
+  cartographerChance: 0.06
   levels:
   - name: Перша облога
     mode: 0

@@ -14,6 +14,8 @@ namespace Pyatnashki
         [SerializeField, Min(0.01f)] private float slideDuration = 0.16f;
         [SerializeField, Min(0.05f)] private float warriorStepDuration = 0.6f;
         [SerializeField, Min(0.05f)] private float warriorReturnDuration = 0.3f;
+        [SerializeField, Range(0, 1)] private float commanderChance = 0.08f;
+        [SerializeField, Range(0, 1)] private float cartographerChance = 0.06f;
         [SerializeField] private LevelSettings[] levels = LevelSettings.Defaults();
         [SerializeField] private bool unlockAllLevelsForDevelopment;
         private readonly List<LevelDefinition> campaign = new List<LevelDefinition>();
@@ -27,8 +29,11 @@ namespace Pyatnashki
         private const string EconomyKey = "Pyatnashki.Kingdom.v1";
         private static long UtcSeconds() => System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         private float ArmyMovementMultiplier => diagnosticRound ? 1f : (float)economy.MovementSpeedMultiplier;
-        private float ArmySpawnInterval => Mathf.Max(0.05f, waveSpawnInterval
-            / (diagnosticRound ? 1f : (float)economy.SpawnSpeedMultiplier));
+        private bool FullSpeed => board.IsSolved && finalTile != null && finalTile.activeSelf;
+        private float ArmyStepSeconds => ArmyTraversalRules.StepSeconds(warriorStepDuration, ArmyMovementMultiplier, FullSpeed);
+        private float ArmyCooldown => FullSpeed ? ArmyTraversalRules.SolvedCooldownSeconds : 0.2f / ArmyMovementMultiplier;
+        private float ArmySpawnInterval => FullSpeed ? ArmyTraversalRules.SolvedSpawnSeconds
+            : Mathf.Max(0.05f, waveSpawnInterval / (diagnosticRound ? 1f : (float)economy.SpawnSpeedMultiplier));
         private bool practiceRound;
         private const string LegacyProgressKey = "Pyatnashki.Campaign.Unlocked.v1";
         private const string StarsVersionKey = "Pyatnashki.Campaign.Stars.v2";
@@ -90,11 +95,12 @@ namespace Pyatnashki
         private sealed class WarriorView
         {
             public int Id;
+            public WarriorRole Role;
             public WarriorSimulation Model;
             public RectTransform Marker;
             public WarriorMotion Motion;
             public Vector2 Start, End, ReturnStart, ReturnTarget, DestinationCentre;
-            public float Elapsed, Cooldown, ReturnElapsed, Duration;
+            public float Elapsed, Cooldown, ReturnElapsed, Duration, ReturnDuration;
             public int Destination;
             public bool Entered, Returning;
         }
@@ -118,6 +124,7 @@ namespace Pyatnashki
                     campaign.Add(settings.ToDefinition());
                 }
                 CampaignMapRules.Validate(campaign);
+                ArmyTraversalRules.ValidateChances(commanderChance, cartographerChance);
             }
             catch (System.ArgumentException error)
             {
@@ -311,7 +318,7 @@ namespace Pyatnashki
         private void RefreshCapitalCastle()
         {
             if (armyBonusText != null)
-                armyBonusText.text = "Вихід ×" + (diagnosticRound ? 1 : economy.SpawnSpeedMultiplier).ToString("0.00")
+                armyBonusText.text = FullSpeed ? "МАКСИМАЛЬНИЙ ТЕМП · крок " + ArmyStepSeconds.ToString("0.00") + " с" : "Вихід ×" + (diagnosticRound ? 1 : economy.SpawnSpeedMultiplier).ToString("0.00")
                     + " · Рух ×" + ArmyMovementMultiplier.ToString("0.00");
             if (capitalCastle == null) return;
             foreach (Transform child in capitalCastle) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
@@ -643,9 +650,29 @@ namespace Pyatnashki
             if (board.IsSolved)
             {
                 finalTile.SetActive(true);
-                statusText.text = "Дошку складено! Завершальна плитка з’єднала маршрут.";
+                ApplySolvedSpeed();
+                statusText.text = "Дошку складено! Максимальний темп війська.";
             }
             RefreshInterface();
+        }
+
+        private void ApplySolvedSpeed()
+        {
+            entryClock = Mathf.Min(entryClock, ArmySpawnInterval);
+            foreach (WarriorView w in warriors)
+            {
+                w.Cooldown = Mathf.Min(w.Cooldown, ArmyCooldown);
+                if (w.Returning)
+                {
+                    float returnProgress = w.ReturnDuration > 0 ? Mathf.Clamp01(w.ReturnElapsed / w.ReturnDuration) : 0;
+                    w.ReturnDuration = 0.1f; w.ReturnElapsed = returnProgress * w.ReturnDuration;
+                }
+                if (w.Motion == WarriorMotion.None) continue;
+                float progress = w.Duration > 0 ? Mathf.Clamp01(w.Elapsed / w.Duration) : 0;
+                w.Duration = ArmyStepSeconds;
+                w.Elapsed = progress * w.Duration;
+            }
+            RefreshCapitalCastle();
         }
 
         private void RefreshInterface(bool updateRoads = true)
@@ -693,7 +720,9 @@ namespace Pyatnashki
         private bool IsQueueHead(WarriorView w)
         {
             foreach (WarriorView candidate in warriors)
-                if (!candidate.Model.Completed && candidate.Model.CurrentTile == 0) return candidate == w;
+                if (!candidate.Model.Completed && candidate.Model.CurrentTile == 0
+                    && (candidate.Role == WarriorRole.Infantry || candidate.Model.CanEnter(board, finalTile.activeSelf)))
+                    return candidate == w;
             return false;
         }
 
@@ -722,7 +751,7 @@ namespace Pyatnashki
             warriors.Clear();
             occupancy.Clear();
             occupancy.UpdateCapacityMode(board, finalTile.activeSelf);
-            entryClock = 0.25f;
+            entryClock = FullSpeed ? ArmySpawnInterval : 0.25f;
             waveNumber++;
             int count = capacityStressTest ? 16
                 : diagnosticRound ? Mathf.Clamp(waveSize, 1, 16) : round.Supply;
@@ -730,11 +759,15 @@ namespace Pyatnashki
             {
                 var marker = Panel("Warrior " + (i + 1), boardRect, WarriorQueuePosition,
                     new Vector2(18, 18), Defense ? new Color(0.12f, 0.55f, 0.88f) : new Color(0.88f, 0.12f + i * 0.012f, 0.18f)).rectTransform;
-                PrototypeArt.Warrior(marker.GetComponent<Image>(), Defense);
-                Label("Identity", marker, new Vector2(0, -1), new Vector2(12, 10), (i + 1).ToString(), 8,
+                WarriorRole role = diagnosticRound ? WarriorRole.Infantry
+                    : ArmyTraversalRules.Roll(random.NextDouble(), commanderChance, cartographerChance);
+                PrototypeArt.Warrior(marker.GetComponent<Image>(), Defense, role);
+                Label("Identity", marker, new Vector2(0, -1), new Vector2(12, 10), role == WarriorRole.Commander ? "К"
+                    : role == WarriorRole.Cartographer ? "М" : (i + 1).ToString(), 8,
                     Color.white, FontStyle.Bold);
-                var w = new WarriorView { Id = i, Model = new WarriorSimulation(occupancy, Defense),
-                    Marker = marker, Cooldown = 0.25f };
+                var w = new WarriorView { Id = i, Role = role, Model = new WarriorSimulation(occupancy, Defense,
+                    role == WarriorRole.Infantry ? null : (System.Func<int, bool>)(tile => traps != null && traps.GetCharges(tile) > 0)),
+                    Marker = marker, Cooldown = FullSpeed ? ArmyCooldown : 0.25f };
                 warriors.Add(w);
                 BindWarriorMarker(w);
             }
@@ -749,10 +782,12 @@ namespace Pyatnashki
 
         private void RefreshWarriorInterface()
         {
-            int queued = 0, onBoard = 0;
+            int queued = 0, onBoard = 0, commanders = 0, cartographers = 0;
             foreach (WarriorView w in warriors)
             {
                 if (w.Model.Completed) continue;
+                if (w.Role == WarriorRole.Commander) commanders++;
+                else if (w.Role == WarriorRole.Cartographer) cartographers++;
                 if (w.Model.CurrentTile == 0) queued++; else onBoard++;
                 if (w.Model.CurrentTile == 0 && w.Motion == WarriorMotion.None && !w.Returning)
                     w.Marker.gameObject.SetActive(IsQueueHead(w));
@@ -760,7 +795,7 @@ namespace Pyatnashki
             sendWarriorButton.interactable = diagnosticRound && !busy && WaveCompleted();
             warriorText.text = "Доставлено: " + deliveredTotal + " / " + round.Supply
                 + "\nНа полі: " + onBoard + " · Втрати: " + casualtiesThisRound
-                + "\nУ таборі: " + queued;
+                + "\nТабір: " + queued + " · К:" + commanders + " М:" + cartographers;
             campCounter.text = "ТАБІР: " + queued;
             entryCaption.text = Defense ? "Захисники: " + round.Delivered + "\nВорог: " + round.EnemyCount + "/" + round.EnemyTotal
                 : "";
@@ -800,7 +835,7 @@ namespace Pyatnashki
             w.Model.CancelReservation();
             Vector3 worldPosition = w.Marker.position;
             w.Motion = WarriorMotion.None;
-            w.Cooldown = 0.2f / ArmyMovementMultiplier;
+            w.Cooldown = ArmyCooldown;
             w.Marker.SetParent(w.Model.CurrentTile == 0 ? boardRect
                 : TileTransform(w.Model.CurrentTile), false);
             w.Marker.position = worldPosition;
@@ -808,6 +843,7 @@ namespace Pyatnashki
             w.ReturnStart = w.Marker.anchoredPosition;
             w.ReturnTarget = w.Model.CurrentTile == 0 ? WarriorQueuePosition : SlotOffset(w);
             w.ReturnElapsed = 0f;
+            w.ReturnDuration = Mathf.Max(0.05f, FullSpeed ? 0.1f : warriorReturnDuration);
             w.Returning = !w.Model.Completed &&
                 (w.ReturnTarget - w.ReturnStart).sqrMagnitude > 0.01f;
         }
@@ -815,13 +851,13 @@ namespace Pyatnashki
         private void AdvanceWarriorReturn(WarriorView w)
         {
             w.ReturnElapsed += Time.unscaledDeltaTime;
-            float t = Mathf.Clamp01(w.ReturnElapsed / Mathf.Max(0.05f, warriorReturnDuration));
+            float t = Mathf.Clamp01(w.ReturnElapsed / w.ReturnDuration);
             w.Marker.anchoredPosition = Vector2.Lerp(w.ReturnStart,
                 w.ReturnTarget, t * t * (3f - 2f * t));
             if (t < 1f) return;
             w.Marker.anchoredPosition = w.ReturnTarget;
             w.Returning = false;
-            w.Cooldown = 0.2f / ArmyMovementMultiplier;
+            w.Cooldown = ArmyCooldown;
         }
 
         private void PlanWarriorMotion(WarriorView w)
@@ -859,7 +895,7 @@ namespace Pyatnashki
             w.End = end;
             w.Elapsed = 0f;
             // Snapshot each segment to avoid a position jump when buying an upgrade mid-round.
-            w.Duration = Mathf.Max(0.05f, warriorStepDuration / ArmyMovementMultiplier);
+            w.Duration = ArmyStepSeconds;
             w.Entered = false;
             w.Marker.SetParent(boardRect, false);
             w.Marker.SetAsLastSibling();
@@ -884,7 +920,7 @@ namespace Pyatnashki
                 if (!diagnosticRound) round.RecordDelivery();
             }
             w.Motion = WarriorMotion.None;
-            w.Cooldown = 0.2f / ArmyMovementMultiplier;
+            w.Cooldown = ArmyCooldown;
             BindWarriorMarker(w);
         }
 

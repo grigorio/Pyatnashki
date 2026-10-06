@@ -10,6 +10,10 @@ namespace Pyatnashki
         private Text homeStats, mapDetails, mapSummary;
         private Button deployButton;
         private int selectedMapLevel;
+        private ScrollRect atlasScroll;
+        private RectTransform atlasWorld;
+        private float atlasFitScale;
+        private bool atlasNavigationReady;
         private int[] deployment;
         private TrapLedger traps;
         private int casualtiesThisRound;
@@ -106,14 +110,37 @@ namespace Pyatnashki
             overlay.raycastTarget = true; levelMenu = overlay.gameObject;
             Label("Map Heading", overlay.rectTransform, new Vector2(0, 630), new Vector2(640, 60), "КАРТА ВОЛОДІНЬ", 30, Gold, FontStyle.Bold);
             mapSummary = Label("Map Summary", overlay.rectTransform, new Vector2(0, 570), new Vector2(640, 45), "", 19, Muted);
-            var viewport = Panel("Map Viewport", overlay.rectTransform, new Vector2(0, 210), new Vector2(660, 630), new Color(0.18f, 0.26f, 0.17f));
+            var viewport = Panel("Map Viewport", overlay.rectTransform, new Vector2(0, 185), new Vector2(660, 610), new Color(0.18f, 0.26f, 0.17f));
             viewport.raycastTarget = true; viewport.gameObject.AddComponent<RectMask2D>();
-            float height = Mathf.Max(630, 270 + ((campaign.Count + 1) / 2) * 120);
+            float height = Mathf.Max(900, 360 + ((campaign.Count + 1) / 2) * 120);
             var map = MakeRect("World", viewport.rectTransform, Vector2.zero, new Vector2(650, height));
             map.anchorMin = map.anchorMax = new Vector2(0.5f, 0); map.pivot = new Vector2(0.5f, 0);
-            var scroll = viewport.gameObject.AddComponent<ScrollRect>();
-            scroll.viewport = viewport.rectTransform; scroll.content = map; scroll.horizontal = false;
-            scroll.movementType = ScrollRect.MovementType.Clamped; scroll.verticalNormalizedPosition = 0;
+            atlasWorld = map;
+            atlasFitScale = Mathf.Min(620f / 650f, 610f / height);
+            atlasScroll = viewport.gameObject.AddComponent<ScrollRect>();
+            atlasScroll.viewport = viewport.rectTransform; atlasScroll.content = map;
+            atlasScroll.horizontal = false; atlasScroll.vertical = true;
+            atlasScroll.inertia = false; atlasScroll.scrollSensitivity = 70;
+            atlasScroll.movementType = ScrollRect.MovementType.Clamped;
+            var terrain = MakeRect("Atlas Terrain", map, new Vector2(0, height * 0.5f), new Vector2(650, height));
+            terrain.gameObject.AddComponent<AtlasTerrainGraphic>().raycastTarget = false;
+            Label("Compass", map, new Vector2(260, height - 85), new Vector2(80, 90), "ПН\n↑\nПД", 22, Gold);
+            Label("Northern Lands", map, new Vector2(-80, height - 85), new Vector2(300, 45), "ПІВНІЧНІ ЗЕМЛІ", 20, PrototypeArt.Dark, FontStyle.Bold);
+            var barImage = Panel("Map Scrollbar", viewport.rectTransform, new Vector2(319, 0), new Vector2(14, 580), PrototypeArt.Dark);
+            barImage.raycastTarget = true;
+            var handleArea = MakeRect("Handle Area", barImage.rectTransform, Vector2.zero, new Vector2(12, 574));
+            var thumb = Panel("Handle", handleArea, Vector2.zero, new Vector2(12, 80), Gold);
+            thumb.raycastTarget = true;
+            var scrollbar = barImage.gameObject.AddComponent<Scrollbar>();
+            scrollbar.handleRect = thumb.rectTransform; scrollbar.targetGraphic = thumb;
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            atlasScroll.verticalScrollbar = scrollbar;
+            atlasScroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            MakeButton("Zoom Out", overlay.rectTransform, new Vector2(-248, 525), new Vector2(110, 34), "−", () => ZoomAtlas(-0.1f));
+            MakeButton("Fit Atlas", overlay.rectTransform, new Vector2(-124, 525), new Vector2(110, 34), "Уся карта", FitAtlas);
+            MakeButton("Zoom In", overlay.rectTransform, new Vector2(0, 525), new Vector2(110, 34), "+", () => ZoomAtlas(0.1f));
+            MakeButton("Map North", overlay.rectTransform, new Vector2(124, 525), new Vector2(110, 34), "↑", () => PanAtlas(0.2f));
+            MakeButton("Map South", overlay.rectTransform, new Vector2(248, 525), new Vector2(110, 34), "↓", () => PanAtlas(-0.2f));
             for (int i = 0; i < campaign.Count; i++)
             {
                 int index = i; Vector2 position = MapPosition(i) + new Vector2(0, 560);
@@ -121,7 +148,7 @@ namespace Pyatnashki
                 {
                     var region = PrototypeArt.Shape("Region " + index, map, position + new Vector2(0, 20),
                         new Vector2(310, 195), new Color(0.10f, 0.14f, 0.11f));
-                    region.transform.SetAsFirstSibling(); mapRegions[index] = region;
+                    mapRegions[index] = region;
                     foreach (int neighbor in campaign[i].UnlockFrom)
                     {
                         Vector2 origin = MapPosition(neighbor) + new Vector2(0, 560);
@@ -151,7 +178,7 @@ namespace Pyatnashki
             MakeButton("Map Capital", overlay.rectTransform, new Vector2(170, -500), new Vector2(300, 60), "Держава", ShowKingdom);
             MakeButton("Map Return", overlay.rectTransform, new Vector2(0, -580), new Vector2(400, 55), "Повернутися", CloseLevels);
             Label("Map Hint", overlay.rectTransform, new Vector2(0, -660), new Vector2(650, 55),
-                "3★ захоплення відкривають сусідню область.\nПастки: втрати враховані в мінімальному загоні.", 17, Muted);
+                "Тягни карту або повзунок · колесо миші · ↑↓\n«Уся карта» показує всі поселення · + збільшує", 17, Muted);
             levelMenu.SetActive(false);
         }
 
@@ -164,7 +191,7 @@ namespace Pyatnashki
                 bool available = IsLevelAvailable(i);
                 if (mapRegions.TryGetValue(i, out Image region))
                 {
-                    region.color = available ? new Color(0.27f, 0.35f, 0.21f) : new Color(0.10f, 0.14f, 0.11f);
+                    region.color = available ? Color.clear : new Color(0.07f, 0.11f, 0.10f, 0.82f);
                     mapHouses[i].SetActive(available);
                 }
                 levelButtons[i].interactable = available;
@@ -176,7 +203,30 @@ namespace Pyatnashki
             mapSummary.text = CampaignMapRules.RulerTitle(OwnedTerritories) + " · Землі: " + OwnedTerritories
                 + "\nВійсько: " + economy.TrainedWarriors + " · Золото: " + economy.Gold;
             levelMenu.SetActive(true); levelMenu.transform.SetAsLastSibling();
+            if (!atlasNavigationReady) { FitAtlas(); atlasNavigationReady = true; }
             SelectMapLevel(IsLevelAvailable(selectedMapLevel) ? selectedMapLevel : 0);
+        }
+
+        private void FitAtlas()
+        {
+            SetAtlasScale(atlasFitScale);
+            atlasScroll.verticalNormalizedPosition = 0;
+        }
+        private void ZoomAtlas(float change) => SetAtlasScale(atlasWorld.localScale.x + change);
+        private void SetAtlasScale(float value)
+        {
+            float position = atlasScroll.verticalNormalizedPosition;
+            atlasScroll.StopMovement();
+            atlasWorld.localScale = Vector3.one * Mathf.Clamp(value, atlasFitScale, 1f);
+            Canvas.ForceUpdateCanvases();
+            atlasScroll.verticalNormalizedPosition = position;
+        }
+        private void PanAtlas(float amount)
+        {
+            // Arrow navigation remains useful after zooming into the full-map overview.
+            if (atlasWorld.localScale.x < 0.99f) SetAtlasScale(1f);
+            atlasScroll.StopMovement();
+            atlasScroll.verticalNormalizedPosition = Mathf.Clamp01(atlasScroll.verticalNormalizedPosition + amount);
         }
 
         private string SettlementName(int captureLevel)

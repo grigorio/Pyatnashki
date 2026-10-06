@@ -1,3 +1,4 @@
+using Pyatnashki.Domain;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -77,7 +78,7 @@ namespace Pyatnashki
                 new Vector2(image.rectTransform.sizeDelta.x - 32, 2), new Color(0.47f, 0.39f, 0.25f));
         }
 
-        public static void Warrior(Image root, bool defense)
+        public static void Warrior(Image root, bool defense, WarriorRole role = WarriorRole.Infantry)
         {
             // All shapes fit the existing 18x18 ownership footprint.
             root.color = Color.clear;
@@ -89,6 +90,13 @@ namespace Pyatnashki
             Shape("Helmet", root.transform, new Vector2(0, 6), new Vector2(9, 5), new Color(0.76f, 0.78f, 0.70f));
             Shape("Visor", root.transform, new Vector2(0, 5), new Vector2(6, 2), Dark);
             Shape("Shield", root.transform, new Vector2(7, -1), new Vector2(3, 8), Gold);
+            if (role == WarriorRole.Commander)
+                Shape("Commander Crest", root.transform, new Vector2(0, 8), new Vector2(12, 2), Gold);
+            else if (role == WarriorRole.Cartographer)
+            {
+                Shape("Cartographer Hood", root.transform, new Vector2(0, 7), new Vector2(11, 3), new Color(0.32f, 0.72f, 0.44f));
+                Shape("Map Scroll", root.transform, new Vector2(-7, -1), new Vector2(3, 7), Parchment);
+            }
         }
 
         public static void Capital(Transform parent, int strength, int terrain, int economy, int diplomacy)

@@ -93,15 +93,17 @@ namespace Pyatnashki.Domain
         public bool Dead { get; private set; }
 
         private readonly bool reverseRoute;
+        private readonly Func<int, bool> avoidTile;
         private int SourceCell => reverseRoute ? RoadLayout.CastleCell : RoadLayout.EntryCell;
         private RoadPorts SourcePort => reverseRoute ? RoadLayout.CastlePort : RoadLayout.EntryPort;
         private int DestinationCell => reverseRoute ? RoadLayout.EntryCell : RoadLayout.CastleCell;
         private RoadPorts DestinationPort => reverseRoute ? RoadLayout.EntryPort : RoadLayout.CastlePort;
 
-        public WarriorSimulation(TileOccupancy occupancy = null, bool reverseRoute = false)
+        public WarriorSimulation(TileOccupancy occupancy = null, bool reverseRoute = false, Func<int, bool> avoidTile = null)
         {
             Occupancy = occupancy ?? new TileOccupancy();
             this.reverseRoute = reverseRoute;
+            this.avoidTile = avoidTile;
         }
 
         public void Reset()
@@ -133,7 +135,7 @@ namespace Pyatnashki.Domain
         {
             if (CurrentTile != 0 || Completed) return false;
             int tile = RoadNetwork.GetTileAt(board, SourceCell, finalTilePresent);
-            return tile != 0 && (RoadLayout.GetPorts(tile) & SourcePort) != 0
+            return tile != 0 && !(avoidTile?.Invoke(tile) ?? false) && (RoadLayout.GetPorts(tile) & SourcePort) != 0
                 && (ReservedTile == tile || Occupancy.HasSpace(tile));
         }
 
@@ -209,7 +211,8 @@ namespace Pyatnashki.Domain
         private bool CanMoveTo(SlidingBoard board, bool finalTilePresent, int tile)
         {
             int from = GetCurrentCell(board, finalTilePresent);
-            if (from < 0 || tile < 1 || tile > RoadLayout.FinalTile || tile == CurrentTile) return false;
+            if (from < 0 || tile < 1 || tile > RoadLayout.FinalTile || tile == CurrentTile
+                || (avoidTile?.Invoke(tile) ?? false)) return false;
             foreach (RoadPorts direction in directions)
                 if (RoadNetwork.TryGetNeighbor(from, direction, out int next)
                     && RoadNetwork.GetTileAt(board, next, finalTilePresent) == tile)
@@ -262,7 +265,7 @@ namespace Pyatnashki.Domain
                 {
                     if (!RoadNetwork.TryGetNeighbor(cell, direction, out int next) || parents[next] >= 0) continue;
                     int nextTile = RoadNetwork.GetTileAt(board, next, finalTilePresent);
-                    if (nextTile == 0 || (respectCapacity && !Occupancy.HasSpace(nextTile))
+                    if (nextTile == 0 || (avoidTile?.Invoke(nextTile) ?? false) || (respectCapacity && !Occupancy.HasSpace(nextTile))
                         || !RoadNetwork.AreConnected(RoadLayout.GetPorts(tile),
                             RoadLayout.GetPorts(nextTile), direction)) continue;
                     parents[next] = cell;
