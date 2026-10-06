@@ -408,6 +408,9 @@ MonoBehaviour:
     fiveStarTimeFraction: 0.5
     fourStarAdvantage: 3
     fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles: []
+    unlockFrom: []
   - name: Збір захисників
     mode: 1
     supply: 20
@@ -420,6 +423,10 @@ MonoBehaviour:
     fiveStarTimeFraction: 0.5
     fourStarAdvantage: 3
     fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles: []
+    unlockFrom:
+    - 0
   - name: Укріплений замок
     mode: 0
     supply: 24
@@ -432,6 +439,11 @@ MonoBehaviour:
     fiveStarTimeFraction: 0.5
     fourStarAdvantage: 3
     fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    unlockFrom:
+    - 0
   - name: Ворог на кордоні
     mode: 1
     supply: 24
@@ -444,6 +456,11 @@ MonoBehaviour:
     fiveStarTimeFraction: 0.5
     fourStarAdvantage: 3
     fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    unlockFrom:
+    - 2
   - name: Велика облога
     mode: 0
     supply: 32
@@ -456,6 +473,12 @@ MonoBehaviour:
     fiveStarTimeFraction: 0.5
     fourStarAdvantage: 3
     fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    - 10
+    unlockFrom:
+    - 0
   - name: Останній рубіж
     mode: 1
     supply: 32
@@ -468,4 +491,10 @@ MonoBehaviour:
     fiveStarTimeFraction: 0.5
     fourStarAdvantage: 3
     fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    - 10
+    unlockFrom:
+    - 4
   unlockAllLevelsForDevelopment: 0

@@ -90,6 +90,7 @@ namespace Pyatnashki.Domain
         public int CurrentTile { get; private set; }
         public int DeliveredCount { get; private set; }
         public bool Completed { get; private set; }
+        public bool Dead { get; private set; }
 
         private readonly bool reverseRoute;
         private int SourceCell => reverseRoute ? RoadLayout.CastleCell : RoadLayout.EntryCell;
@@ -109,15 +110,23 @@ namespace Pyatnashki.Domain
             if (CurrentTile != 0) Occupancy.Leave(CurrentTile);
             CurrentTile = DeliveredCount = 0;
             Completed = false;
+            Dead = false;
             visited.Clear();
         }
 
         public bool QueueNext()
         {
-            if (!Completed) return false;
+            if (!Completed || Dead) return false;
             Completed = false;
             visited.Clear();
             return true;
+        }
+        public bool Kill()
+        {
+            if (Completed) return false;
+            CancelReservation();
+            if (CurrentTile != 0) Occupancy.Leave(CurrentTile);
+            CurrentTile = 0; Completed = Dead = true; return true;
         }
 
         public bool CanEnter(SlidingBoard board, bool finalTilePresent)

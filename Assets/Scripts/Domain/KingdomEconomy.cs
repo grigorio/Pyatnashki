@@ -39,6 +39,9 @@ namespace Pyatnashki.Domain
     {
         public int version = 1;
         public long gold, lastUtcSeconds;
+        public bool armyInitialized;
+        public int trainedWarriors;
+        public long casualties, battles, victories;
         public int[] capital = new int[6];
         public SettlementSave[] settlements;
     }
@@ -50,6 +53,11 @@ namespace Pyatnashki.Domain
         private readonly SettlementSave[] states;
         private readonly int[] capital = new int[6];
         public long Gold { get; private set; }
+        public int TrainedWarriors { get; private set; } = 20;
+        public long Casualties { get; private set; }
+        public long Battles { get; private set; }
+        public long Victories { get; private set; }
+        public const int TrainingCost = 5;
         public long LastUtcSeconds { get; private set; }
         public int Count => definitions.Length;
         public double StorageHours => 12 + GetCapital(CapitalStat.Economy) * 2;
@@ -72,6 +80,14 @@ namespace Pyatnashki.Domain
                     || (save.capital.Length != 4 && save.capital.Length != 6))
                     throw new ArgumentException("Invalid kingdom save.");
                 Gold = save.gold;
+                if (save.armyInitialized)
+                {
+                    if (save.trainedWarriors < 0 || save.trainedWarriors > 99 || save.casualties < 0
+                        || save.battles < 0 || save.victories < 0 || save.victories > save.battles)
+                        throw new ArgumentException("Invalid army save.");
+                    TrainedWarriors = save.trainedWarriors; Casualties = save.casualties;
+                    Battles = save.battles; Victories = save.victories;
+                }
                 for (int i = 0; i < save.capital.Length; i++)
                 {
                     if (save.capital[i] < 0 || save.capital[i] > 3) throw new ArgumentException("Invalid capital tier.");
@@ -180,8 +196,21 @@ namespace Pyatnashki.Domain
             for (int i = 0; i < Count; i++) copy[i] = new SettlementSave { id = states[i].id,
                 captureStars = states[i].captureStars, defenseStars = states[i].defenseStars, stored = states[i].stored };
             return new KingdomSave { gold = Gold, lastUtcSeconds = LastUtcSeconds,
+                armyInitialized = true, trainedWarriors = TrainedWarriors, casualties = Casualties,
+                battles = Battles, victories = Victories,
                 capital = (int[])capital.Clone(), settlements = copy };
         }
+        public bool Train(int count)
+        {
+            if (count < 1 || count > 99 - TrainedWarriors || Gold < count * TrainingCost) return false;
+            Gold -= count * TrainingCost; TrainedWarriors += count; return true;
+        }
+        public bool LoseWarrior()
+        {
+            if (TrainedWarriors == 0) return false;
+            TrainedWarriors--; Casualties++; return true;
+        }
+        public void RecordBattle(bool won) { Battles++; if (won) Victories++; }
         private void Check(int index) { if (index < 0 || index >= Count) throw new ArgumentOutOfRangeException(nameof(index)); }
     }
 }

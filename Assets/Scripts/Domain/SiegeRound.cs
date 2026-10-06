@@ -15,6 +15,7 @@ namespace Pyatnashki.Domain
         public int Supply { get; private set; }
         public int Target { get; private set; }
         public int Delivered { get; private set; }
+        public int Casualties { get; private set; }
         public double Duration { get; private set; }
         public double Remaining { get; private set; }
         public double Elapsed => Duration - Remaining;
@@ -31,7 +32,7 @@ namespace Pyatnashki.Domain
             Supply = supply;
             Target = target;
             Duration = Remaining = duration;
-            Delivered = 0;
+            Delivered = Casualties = 0;
             State = SiegeRoundState.Running;
         }
 
@@ -50,7 +51,7 @@ namespace Pyatnashki.Domain
             EnemyTotal = EnemyCount = 0;
             EnemyInterval = 1;
             State = SiegeRoundState.Ready;
-            Supply = Target = Delivered = 0;
+            Supply = Target = Delivered = Casualties = 0;
             Duration = Remaining = 0;
         }
 
@@ -72,6 +73,15 @@ namespace Pyatnashki.Domain
             if (State != SiegeRoundState.Running || Delivered >= Supply) return false;
             Delivered++;
             if (Mode == LevelMode.Capture && Delivered >= Target) State = SiegeRoundState.Won;
+            return true;
+        }
+        public bool RecordCasualty()
+        {
+            if (State != SiegeRoundState.Running || Delivered + Casualties >= Supply) return false;
+            Casualties++;
+            int needed = Mode == LevelMode.Capture ? Target
+                : (int)Math.Min(EnemyTotal, Math.Floor((Duration + 1e-9) / EnemyInterval)) + 1;
+            if (Supply - Casualties < needed) State = SiegeRoundState.Lost;
             return true;
         }
     }

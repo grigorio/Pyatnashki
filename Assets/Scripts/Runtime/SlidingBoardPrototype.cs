@@ -9,7 +9,7 @@ using UnityEngine.UI;
 namespace Pyatnashki
 {
     /// <summary>Sliding board and road preview built at runtime in SampleScene.</summary>
-    public sealed class SlidingBoardPrototype : MonoBehaviour
+    public sealed partial class SlidingBoardPrototype : MonoBehaviour
     {
         [SerializeField, Min(0.01f)] private float slideDuration = 0.16f;
         [SerializeField, Min(0.05f)] private float warriorStepDuration = 0.6f;
@@ -21,7 +21,8 @@ namespace Pyatnashki
         private CampaignProgress progress;
         private KingdomEconomy economy;
         private KingdomView kingdomView;
-        private RectTransform capitalCastle;
+        private RectTransform capitalCastle, campArt;
+        private Text campCounter;
         private float economyClock, economySaveClock;
         private const string EconomyKey = "Pyatnashki.Kingdom.v1";
         private static long UtcSeconds() => System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -33,17 +34,16 @@ namespace Pyatnashki
         private const string StarsVersionKey = "Pyatnashki.Campaign.Stars.v2";
         private static string StarsKey(int index) => StarsVersionKey + ".Level." + index;
         private readonly List<Button> levelButtons = new List<Button>();
-        private readonly List<string> levelCaptions = new List<string>();
         private GameObject levelMenu;
         private Text levelTitle, entryCaption, entryArrow, castleArrow;
         private Button nextLevelButton, levelsButton;
         private LevelDefinition CurrentLevel => campaign[levelIndex];
         private bool Defense => !diagnosticRound && round.Mode == LevelMode.Defense;
-        private bool MenuOpen => (levelMenu != null && levelMenu.activeSelf) || (kingdomView != null && kingdomView.IsOpen);
+        private bool MenuOpen => (homeMenu != null && homeMenu.activeSelf) || (levelMenu != null && levelMenu.activeSelf) || (kingdomView != null && kingdomView.IsOpen);
         private int SourceCell => Defense ? RoadLayout.CastleCell : RoadLayout.EntryCell;
         private int DestinationCell => Defense ? RoadLayout.EntryCell : RoadLayout.CastleCell;
-        private Vector2 SourceOutside => Defense ? new Vector2(0, 144) : new Vector2(0, -144);
-        private Vector2 DestinationOutside => Defense ? new Vector2(0, -144) : new Vector2(0, 144);
+        private Vector2 SourceOutside => Defense ? new Vector2(0, 160) : new Vector2(0, -160);
+        private Vector2 DestinationOutside => Defense ? new Vector2(0, -160) : new Vector2(0, 160);
         private readonly SiegeRound round = new SiegeRound();
         private bool diagnosticRound;
         private bool capacityStressTest;
@@ -117,6 +117,7 @@ namespace Pyatnashki
                     if (settings == null) throw new System.ArgumentException("Level settings cannot be null.");
                     campaign.Add(settings.ToDefinition());
                 }
+                CampaignMapRules.Validate(campaign);
             }
             catch (System.ArgumentException error)
             {
@@ -124,18 +125,23 @@ namespace Pyatnashki
                 enabled = false;
                 return;
             }
+            deployment = new int[campaign.Count];
             LoadProgress();
             LoadEconomy();
             BuildInterface();
             StartLevel(0);
-            ShowLevels();
+            ShowHome();
         }
 
         private void Update()
         {
             economyClock += Time.unscaledDeltaTime;
             economySaveClock += Time.unscaledDeltaTime;
-            if (economyClock >= 1) { economyClock = 0; economy.Advance(UtcSeconds()); }
+            if (economyClock >= 1)
+            {
+                economyClock = 0; economy.Advance(UtcSeconds());
+                if (homeMenu != null && homeMenu.activeSelf) RefreshHomeStats();
+            }
             if (economySaveClock >= 60) { economySaveClock = 0; SaveEconomy(); }
             if (RoundEnded || MenuOpen) return;
             if (!diagnosticRound)
@@ -163,32 +169,19 @@ namespace Pyatnashki
         private void StartLevel(int index, bool practice = false)
         {
             if (busy || index < 0 || index >= campaign.Count
-                || (!unlockAllLevelsForDevelopment && !progress.IsUnlocked(index))) return;
+                || (!unlockAllLevelsForDevelopment && !IsLevelAvailable(index))) return;
+            if (!practice && economy.TrainedWarriors < campaign[index].MinimumSupply)
+            {
+                ShowLevels(); SelectMapLevel(index); return;
+            }
             levelIndex = index;
+            if (deployment[index] < campaign[index].MinimumSupply)
+                deployment[index] = Mathf.Min(campaign[index].Supply, economy.TrainedWarriors);
+            if (homeMenu != null) homeMenu.SetActive(false);
             practiceRound = practice;
             levelMenu.SetActive(false);
             kingdomView.Hide();
             StartRound(practice ? 1 : CurrentLevel.ScrambleMoves);
-        }
-
-        private void ShowLevels()
-        {
-            if (busy) return;
-            inputVersion++;
-            for (int i = 0; i < levelButtons.Count; i++)
-            {
-                bool available = unlockAllLevelsForDevelopment || progress.IsUnlocked(i);
-                levelButtons[i].interactable = available;
-                Text caption = levelButtons[i].GetComponentInChildren<Text>();
-                caption.text = (available ? "" : "ЗАБЛОКОВАНО · потрібні 3 зірки\n")
-                    + levelCaptions[i] + "\nНайкраще: " + progress.GetBest(i) + " / 5";
-                caption.fontSize = 19;
-                caption.color = available ? Ink : Muted;
-                levelButtons[i].targetGraphic.color = available
-                    ? PrototypeArt.Wood : new Color(0.14f, 0.17f, 0.12f);
-            }
-            levelMenu.SetActive(true);
-            levelMenu.transform.SetAsLastSibling();
         }
 
         private void CloseLevels()
@@ -284,6 +277,7 @@ namespace Pyatnashki
             economy = new KingdomEconomy(SettlementDefinitions(), UtcSeconds(), saved);
             SaveEconomy();
             if (kingdomView != null) kingdomView.SetEconomy(economy);
+            if (homeMenu != null) RefreshHomeStats();
         }
 #endif
 
@@ -310,7 +304,7 @@ namespace Pyatnashki
                         entryClock = Mathf.Min(entryClock, ArmySpawnInterval);
                     }
                     return purchased; },
-                () => { inputVersion++; kingdomView.Hide(); });
+                () => { inputVersion++; kingdomView.Hide(); if (homeMenu != null) { RefreshHomeStats(); RefreshHomeCapital(); } });
             kingdomView.Hide();
         }
 
@@ -321,7 +315,7 @@ namespace Pyatnashki
                     + " · Рух ×" + ArmyMovementMultiplier.ToString("0.00");
             if (capitalCastle == null) return;
             foreach (Transform child in capitalCastle) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
-            PrototypeArt.Capital(capitalCastle,
+            PrototypeArt.CastleFront(capitalCastle,
                 economy.GetCapital(CapitalStat.Strength),
                 economy.GetCapital(CapitalStat.Terrain),
                 economy.GetCapital(CapitalStat.Economy),
@@ -370,52 +364,6 @@ namespace Pyatnashki
             }
         }
 
-        private void BuildLevelMenu()
-        {
-            var overlay = Panel("Level Selection", contentRect, Vector2.zero, new Vector2(700, 1400),
-                new Color(0.07f, 0.10f, 0.075f, 0.98f));
-            overlay.raycastTarget = true;
-            levelMenu = overlay.gameObject;
-            Label("Heading", overlay.rectTransform, new Vector2(0, 580), new Vector2(640, 60),
-                "ОБЕРИ РІВЕНЬ", 32, Gold, FontStyle.Bold);
-            // Scrollable viewport supports campaigns longer than the initial six levels.
-            var viewport = Panel("Level Viewport", overlay.rectTransform, new Vector2(0, 105),
-                new Vector2(650, 820), PrototypeArt.Dark);
-            viewport.raycastTarget = true;
-            viewport.gameObject.AddComponent<RectMask2D>();
-            var list = MakeRect("Level List", viewport.rectTransform, Vector2.zero,
-                new Vector2(650, Mathf.Max(820, campaign.Count * 130)));
-            list.anchorMin = list.anchorMax = new Vector2(0.5f, 1);
-            list.pivot = new Vector2(0.5f, 1);
-            var scroll = viewport.gameObject.AddComponent<ScrollRect>();
-            scroll.content = list;
-            scroll.viewport = viewport.rectTransform;
-            scroll.horizontal = false;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
-            for (int i = 0; i < campaign.Count; i++)
-            {
-                int index = i;
-                LevelDefinition level = campaign[i];
-                string details = level.Mode == LevelMode.Capture
-                    ? "Захоплення · ціль " + level.CaptureTarget + " / запас " + level.Supply
-                    : "Захист · запас " + level.Supply + " / ворог до " + level.EnemyTotal;
-                string caption = (i + 1) + ". " + level.Name + "\n" + details
-                    + " · " + level.Duration.ToString("0") + " с";
-                levelCaptions.Add(caption);
-                levelButtons.Add(MakeButton("Level " + (i + 1), list, new Vector2(0, -65 - i * 130),
-                    new Vector2(620, 110), caption, () => StartLevel(index)));
-                var row = levelButtons[i].GetComponent<RectTransform>();
-                row.anchorMin = row.anchorMax = new Vector2(0.5f, 1);
-            }
-            Label("Campaign Hint", overlay.rectTransform, new Vector2(0, -400), new Vector2(620, 130),
-                "Для наступного рівня отримай від 3 зірок.\nЗберігається найкращий результат із 5.\nНавчання не змінює прогрес. Меню — пауза.", 20, Muted);
-            MakeButton("Kingdom", overlay.rectTransform, new Vector2(0, -615),
-                new Vector2(320, 54), "Наші володіння", ShowKingdom);
-            MakeButton("Back", overlay.rectTransform, new Vector2(0, -540), new Vector2(320, 60),
-                "Повернутися", CloseLevels);
-            levelMenu.SetActive(false);
-        }
-
         private void BuildResultOverlay()
         {
             var overlay = Panel("Round Result", contentRect, Vector2.zero, new Vector2(700, 1400),
@@ -431,7 +379,7 @@ namespace Pyatnashki
             MakeButton("Retry", overlay.rectTransform, new Vector2(0, -155),
                 new Vector2(360, 64), "Повторити рівень", () => StartLevel(levelIndex, practiceRound));
             nextLevelButton = MakeButton("Next Level", overlay.rectTransform, new Vector2(0, -235),
-                new Vector2(360, 64), "Наступний рівень", () => StartLevel(levelIndex + 1));
+                new Vector2(360, 64), "Карта володінь", ShowLevels);
             MakeButton("Result Levels", overlay.rectTransform, new Vector2(0, -315),
                 new Vector2(360, 64), "Вибір рівня", ShowLevels);
             MakeButton("Result Kingdom", overlay.rectTransform, new Vector2(0, -395),
@@ -450,8 +398,10 @@ namespace Pyatnashki
                 w.Motion = WarriorMotion.None;
                 w.Returning = false;
             }
+            RefreshTrapSigns();
             RefreshInterface();
             bool won = round.State == SiegeRoundState.Won;
+            if (!practiceRound) { economy.RecordBattle(won); SaveEconomy(); }
             int stars = LevelRating.Calculate(CurrentLevel, round);
             if (!practiceRound && progress.Record(levelIndex, stars))
             {
@@ -461,14 +411,14 @@ namespace Pyatnashki
             }
             resultStars.text = new string('★', stars) + new string('☆', 5 - stars)
                 + "\n" + stars + " / 5 · Найкраще: " + progress.GetBest(levelIndex) + " / 5";
-            nextLevelButton.gameObject.SetActive(!practiceRound && levelIndex + 1 < campaign.Count
-                && progress.IsUnlocked(levelIndex + 1));
+            nextLevelButton.gameObject.SetActive(!practiceRound);
             resultTitle.text = Defense ? (won ? "ЗЕМЛЮ ЗАХИЩЕНО!" : "ЗАХИСТ НЕ ВДАВСЯ")
                 : won ? "ЗАМОК ЗАХОПЛЕНО!" : "ЧАС ВИЧЕРПАНО";
             resultTitle.color = won ? Gold : new Color(1f, 0.35f, 0.30f);
             resultDetails.text = (Defense ? "Захисників на рубежі: " + round.Delivered
                 + "\nВорогів: " + round.EnemyCount + (round.Delivered == round.EnemyCount ? " · нічия" : "")
                 : "Доставлено воїнів: " + round.Delivered + " / " + round.Target)
+                + "\nВтрати: " + casualtiesThisRound + " · Військо: " + economy.TrainedWarriors
                 + "\nХоди: " + board.MoveCount + "\nВитрачено часу: " + round.Elapsed.ToString("0.0") + " с"
                 + (practiceRound ? "\nНавчання: прогрес не змінено" : "");
             resultOverlay.SetActive(true);
@@ -498,16 +448,15 @@ namespace Pyatnashki
             levelsButton = MakeButton("Levels", contentRect, new Vector2(155, 650),
                 new Vector2(105, 50), "Рівні", ShowLevels);
             MakeButton("Kingdom Shortcut", contentRect, new Vector2(275, 650),
-                new Vector2(125, 50), "Держава", ShowKingdom);
-            Label("Instructions", contentRect, new Vector2(0, 590), new Vector2(660, 55),
-                "Свайп до прогалини або торкання\nЗолота рамка — хід · ✓ — правильна позиція", 18, Muted);
+                new Vector2(125, 50), "Меню", ShowHome);
 
-            boardRect = MakeRect("Board", contentRect, new Vector2(0, -70), new Vector2(592, 592));
+
+            boardRect = MakeRect("Board", contentRect, new Vector2(0, -25), new Vector2(660, 660));
             PrototypeArt.Board(boardRect);
-            Panel("Board Frame", boardRect, Vector2.zero, new Vector2(592, 592),
+            Panel("Board Frame", boardRect, Vector2.zero, new Vector2(660, 660),
                 new Color(0.13f, 0.18f, 0.12f));
             for (int i = 0; i < SlidingBoard.CellCount; i++)
-                Panel("Cell " + i, boardRect, CellPosition(i), new Vector2(132, 132),
+                Panel("Cell " + i, boardRect, CellPosition(i), new Vector2(154, 154),
                     new Color(0.10f, 0.14f, 0.09f));
             BuildRoadLinks();
             emptyMarker = Label("Empty Cell", boardRect, Vector2.zero, new Vector2(130, 70),
@@ -516,7 +465,7 @@ namespace Pyatnashki
             {
                 int number = tile;
                 var button = MakeButton("Tile " + tile, boardRect, Vector2.zero,
-                    new Vector2(132, 132), "", () => { });
+                    new Vector2(154, 154), "", () => { });
                 button.gameObject.AddComponent<TileGestureInput>().Configure(
                     () => board.GetIndexOf(number), () => board.EmptyIndex, () => inputVersion,
                     () => !busy && !MenuOpen && !RoundEnded && !board.IsSolved && board.CanMoveTile(number),
@@ -527,6 +476,16 @@ namespace Pyatnashki
                 tileBorders[tile] = button.GetComponent<Outline>();
                 PrototypeArt.Terrain(tile, tiles[tile]);
                 BuildRoad(tile, tiles[tile]);
+                trapSigns[tile] = Label("Trap Warning", tiles[tile], new Vector2(0, -29), new Vector2(108, 20), "", 13,
+                    new Color(1f, 0.35f, 0.25f), FontStyle.Bold);
+                var trapMark = MakeRect("Trap Spikes", tiles[tile], Vector2.zero, Vector2.zero);
+                foreach (int side in new[] { -1, 1 })
+                {
+                    var spike = PrototypeArt.Shape("Spike", trapMark, Vector2.zero, new Vector2(30, 5), new Color(0.78f, 0.22f, 0.14f));
+                    spike.rectTransform.localRotation = Quaternion.Euler(0, 0, side * 45);
+                }
+                trapMarks[tile] = trapMark.gameObject;
+                trapMark.gameObject.SetActive(false);
                 PrototypeArt.Badge(tiles[tile], new Vector2(-43, 48), new Vector2(38, 28));
                 PrototypeArt.Badge(tiles[tile], new Vector2(-42, -49), new Vector2(46, 22));
                 PrototypeArt.Badge(tiles[tile], new Vector2(46, -49), new Vector2(26, 22));
@@ -539,7 +498,7 @@ namespace Pyatnashki
                 reservationTexts[tile] = Label("Reserved", tiles[tile], new Vector2(46, -49),
                     new Vector2(26, 22), "", 12, Gold);
             }
-            var final = Panel("Final Tile", boardRect, CellPosition(15), new Vector2(132, 132), PrototypeArt.TerrainColor(16));
+            var final = Panel("Final Tile", boardRect, CellPosition(15), new Vector2(154, 154), PrototypeArt.TerrainColor(16));
             PrototypeArt.Border(final, Gold, 3);
             PrototypeArt.Terrain(16, final.rectTransform);
             finalTile = final.gameObject;
@@ -556,10 +515,13 @@ namespace Pyatnashki
             reservationTexts[16] = Label("Final Reserved", final.rectTransform, new Vector2(46, -49),
                 new Vector2(26, 22), "", 12, Gold);
             finalTile.SetActive(false);
+            campArt = MakeRect("Military Camp", boardRect, Vector2.zero, Vector2.zero);
+            PrototypeArt.Camp(campArt);
+            campCounter = Label("Camp Count", contentRect, new Vector2(240, -487), new Vector2(150, 28), "", 16, Gold);
             entryArrow = Label("Entry Arrow", contentRect, new Vector2(216, -400), new Vector2(44, 44),
                 "↑", 36, Gold, FontStyle.Bold);
             entryCaption = Label("Entry Caption", contentRect, new Vector2(210, -485), new Vector2(200, 50),
-                "ЧЕРГА ВОЇНІВ\n↑", 18, Muted);
+                "ВІЙСЬКОВИЙ ТАБІР\n↑", 18, Muted);
             BuildSidePanels();
             shuffleButton = MakeButton("Shuffle", contentRect, new Vector2(-170, -555),
                 new Vector2(320, 60), "Повторити рівень", () => StartLevel(levelIndex));
@@ -576,31 +538,24 @@ namespace Pyatnashki
             BuildResultOverlay();
             BuildLevelMenu();
             BuildKingdomView();
+            BuildHomeMenu();
             FitSafeArea();
         }
 
         private void BuildSidePanels()
         {
-            Color panel = new Color(0.15f, 0.20f, 0.14f);
-            var army = Panel("Army Panel", contentRect, new Vector2(-170, 480), new Vector2(320, 160), panel);
-            PrototypeArt.Card(army);
-            Label("Army Title", army.rectTransform, new Vector2(0, 60), new Vector2(290, 28),
-                "ВІЙСЬКО", 22, Ink, FontStyle.Bold);
-            warriorText = Label("Warrior State", army.rectTransform, Vector2.zero, new Vector2(300, 94), "", 17, Ink);
-            var progress = Panel("Progress Panel", contentRect, new Vector2(170, 480), new Vector2(320, 160), panel);
-            PrototypeArt.Card(progress);
-            Label("Progress Title", progress.rectTransform, new Vector2(0, 60), new Vector2(290, 28),
-                "РАУНД", 22, Ink, FontStyle.Bold);
-            timeText = Label("Time", progress.rectTransform, new Vector2(0, 22), new Vector2(290, 30), "", 23, Gold);
-            movesText = Label("Moves", progress.rectTransform, new Vector2(0, -12), new Vector2(290, 28), "", 20, Gold);
-            correctText = Label("Correct Tiles", progress.rectTransform, new Vector2(0, -45), new Vector2(290, 40), "", 17, Ink);
-            Label("Castle Title", contentRect, new Vector2(-72, 380), new Vector2(200, 30), "ЗАМОК", 22, Ink, FontStyle.Bold);
-            capitalCastle = MakeRect("Castle Appearance", contentRect, new Vector2(-72, 307), Vector2.zero);
+            var stats = Panel("Compact Statistics", contentRect, new Vector2(0, 560), new Vector2(660, 85), PrototypeArt.Dark);
+            PrototypeArt.Card(stats);
+            warriorText = Label("Warriors", stats.rectTransform, new Vector2(-190, 0), new Vector2(260, 78), "", 16, Ink);
+            timeText = Label("Time", stats.rectTransform, new Vector2(35, 19), new Vector2(155, 32), "", 23, Gold);
+            movesText = Label("Moves", stats.rectTransform, new Vector2(35, -18), new Vector2(155, 30), "", 16, Muted);
+            correctText = Label("Tiles", stats.rectTransform, new Vector2(225, 0), new Vector2(185, 65), "", 17, Ink);
+            capitalCastle = MakeRect("Castle Front", contentRect, new Vector2(0, 430), Vector2.zero);
             RefreshCapitalCastle();
-            castleArrow = Label("Castle Arrow", contentRect, new Vector2(-72, 250), new Vector2(44, 44), "↑", 36, Gold);
-            routeText = Label("Route", contentRect, new Vector2(190, 310), new Vector2(260, 70), "", 19, Ink);
-            armyBonusText = Label("Army Bonuses", contentRect, new Vector2(190, 260), new Vector2(260, 28), "", 15, Gold);
-            goalText = Label("Goal", contentRect, new Vector2(-115, -425), new Vector2(390, 72), "", 20, Muted);
+            castleArrow = Label("Castle Arrow", contentRect, new Vector2(-80, 329), new Vector2(44, 35), "↑", 28, Gold);
+            routeText = Label("Route", contentRect, new Vector2(130, 330), new Vector2(380, 34), "", 16, Ink);
+            armyBonusText = Label("Army Bonuses", contentRect, new Vector2(80, 501), new Vector2(450, 25), "", 15, Gold);
+            goalText = Label("Goal", contentRect, new Vector2(-125, -430), new Vector2(390, 70), "", 18, Muted);
         }
 
         private void StartRound(int steps, bool carryTest = false, bool capacityTest = false)
@@ -610,14 +565,26 @@ namespace Pyatnashki
             diagnosticRound = carryTest || capacityTest;
             capacityStressTest = capacityTest;
             round.Reset();
-            if (!diagnosticRound) round.Start(CurrentLevel);
+            if (!diagnosticRound)
+            {
+                int supply = practiceRound ? CurrentLevel.Supply
+                    : Mathf.Clamp(deployment[levelIndex], CurrentLevel.MinimumSupply,
+                        Mathf.Min(CurrentLevel.Supply, economy.TrainedWarriors));
+                round.Start(CurrentLevel.WithSupply(supply));
+            }
             else practiceRound = false;
+            casualtiesThisRound = 0;
+            traps = diagnosticRound ? null : new TrapLedger(CurrentLevel);
             resultOverlay.SetActive(false);
             sendWarriorButton.gameObject.SetActive(diagnosticRound);
             levelTitle.text = diagnosticRound ? "ПЕРЕВІРКА МЕХАНІКИ"
                 : (levelIndex + 1) + ". " + CurrentLevel.Name + (practiceRound ? " · навчання" : "");
             RefreshCapitalCastle();
             entryArrow.text = castleArrow.text = Defense ? "↓" : "↑";
+            campArt.anchoredPosition = WarriorQueuePosition;
+            campArt.SetAsFirstSibling();
+            campCounter.rectTransform.anchoredPosition = Defense ? new Vector2(-80, 474) : new Vector2(240, -487);
+            campCounter.transform.SetAsLastSibling();
             goalText.text = diagnosticRound ? "Перевірка механіки\nбез таймера та результату."
                 : Defense ? "Збери більше захисників, ніж ворогів.\nБій — після завершення часу."
                 : "Достав " + round.Target + " воїнів до замку\nза відведений час.";
@@ -641,6 +608,7 @@ namespace Pyatnashki
                 ? "Один правильний хід — і з’явиться завершальна плитка."
                 : "Золоті плитки можна пересунути. Зелені вже на своїх місцях.";
             CreateWave();
+            RefreshTrapSigns();
             RefreshInterface();
         }
 
@@ -781,24 +749,21 @@ namespace Pyatnashki
 
         private void RefreshWarriorInterface()
         {
-            int queued = 0, onBoard = 0, moving = 0, waiting = 0;
+            int queued = 0, onBoard = 0;
             foreach (WarriorView w in warriors)
             {
                 if (w.Model.Completed) continue;
                 if (w.Model.CurrentTile == 0) queued++; else onBoard++;
-                if (w.Motion != WarriorMotion.None || w.Returning) moving++;
-                else if (w.Model.CurrentTile != 0 && w.Cooldown <= 0f) waiting++;
                 if (w.Model.CurrentTile == 0 && w.Motion == WarriorMotion.None && !w.Returning)
                     w.Marker.gameObject.SetActive(IsQueueHead(w));
             }
             sendWarriorButton.interactable = diagnosticRound && !busy && WaveCompleted();
-            warriorText.text = (Defense ? "На рубежі: " : "Доставлено: ")  + deliveredTotal
-                + (diagnosticRound || Defense ? "" : "/" + round.Target) + "\nНа вході: " + queued
-                + " • На полі: " + onBoard + "\nРухаються: " + moving + " • Чекають: " + waiting
-                + (diagnosticRound ? "\nХвиля: " + waveNumber + " (" + warriors.Count + ")"
-                    : "\nЗагальний запас: " + round.Supply);
+            warriorText.text = "Доставлено: " + deliveredTotal + " / " + round.Supply
+                + "\nНа полі: " + onBoard + " · Втрати: " + casualtiesThisRound
+                + "\nУ таборі: " + queued;
+            campCounter.text = "ТАБІР: " + queued;
             entryCaption.text = Defense ? "Захисники: " + round.Delivered + "\nВорог: " + round.EnemyCount + "/" + round.EnemyTotal
-                : "ЧЕРГА ВОЇНІВ\n↑";
+                : "";
             entryCaption.color = Defense ? Gold : Muted;
             int seconds = Mathf.CeilToInt((float)round.Remaining);
             timeText.text = diagnosticRound ? "Без таймера"
@@ -940,7 +905,27 @@ namespace Pyatnashki
             w.Entered = w.Motion == WarriorMotion.Enter
                 ? w.Model.TryEnter(board, finalTile.activeSelf)
                 : w.Model.TryMoveTo(board, finalTile.activeSelf, w.Destination);
+            if (w.Entered && traps != null && traps.Trigger(w.Model.CurrentTile))
+            {
+                w.Model.Kill(); w.Motion = WarriorMotion.None; w.Returning = false;
+                w.Marker.gameObject.SetActive(false); casualtiesThisRound++;
+                round.RecordCasualty();
+                if (!practiceRound) { economy.LoseWarrior(); SaveEconomy(); }
+                RefreshTrapSigns();
+                statusText.text = "Пастка спрацювала! Втрати: " + casualtiesThisRound;
+            }
             return w.Entered;
+        }
+
+        private void RefreshTrapSigns()
+        {
+            for (int tile = 1; tile <= 15; tile++)
+            {
+                if (trapSigns[tile] == null) continue;
+                int charges = traps == null ? 0 : traps.GetCharges(tile);
+                trapSigns[tile].text = charges > 0 ? "ПАСТКА ×" + charges : "";
+                trapMarks[tile].SetActive(charges > 0);
+            }
         }
 
         private void BuildRoad(int tile, RectTransform parent)
@@ -960,11 +945,11 @@ namespace Pyatnashki
                 {
                     if ((ports & direction) == 0) continue;
                     bool vertical = direction == RoadPorts.North || direction == RoadPorts.South;
-                    Vector2 position = direction == RoadPorts.North ? new Vector2(0, 33)
-                        : direction == RoadPorts.South ? new Vector2(0, -33)
-                        : direction == RoadPorts.East ? new Vector2(33, 0) : new Vector2(-33, 0);
+                    Vector2 position = direction == RoadPorts.North ? new Vector2(0, 38.5f)
+                        : direction == RoadPorts.South ? new Vector2(0, -38.5f)
+                        : direction == RoadPorts.East ? new Vector2(38.5f, 0) : new Vector2(-38.5f, 0);
                     var road = Panel((pass == 0 ? "Road Bed " : "Road ") + direction, parent,
-                        position, vertical ? new Vector2(width, 66) : new Vector2(66, width), color);
+                        position, vertical ? new Vector2(width, 77) : new Vector2(77, width), color);
                     if (pass == 1) roads[tile].Add(road);
                 }
             }
@@ -1010,7 +995,7 @@ namespace Pyatnashki
                 link.Image.gameObject.SetActive(joined);
                 link.Image.color = route.IsReachable(link.Cell) ? connected : disconnected;
             }
-            routeText.text = "Доступні плитки: " + route.ReachableTileCount + " / 16\n"
+            routeText.text = "Дороги: " + route.ReachableTileCount + "/16 · "
                 + (route.HasCastleRoute ? (Defense ? "Шлях до рубежу відкрито" : "Шлях до замку відкрито")
                     : (Defense ? "Шлях до рубежу розірвано" : "Шлях до замку розірвано"));
             routeText.color = route.HasCastleRoute ? new Color(0.72f, 0.88f, 0.49f) : Ink;
@@ -1029,7 +1014,7 @@ namespace Pyatnashki
         }
 
         private static Vector2 CellPosition(int index) => new Vector2(
-            (index % 4 - 1.5f) * 144f, (1.5f - index / 4) * 144f);
+            (index % 4 - 1.5f) * 160f, (1.5f - index / 4) * 160f);
 
         private static RectTransform MakeRect(string name, Transform parent, Vector2 position, Vector2 size)
         {

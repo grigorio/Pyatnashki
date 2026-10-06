@@ -20,24 +20,28 @@ namespace Pyatnashki
         [Range(0.01f, 1)] public float fiveStarTimeFraction = 0.5f;
         [Min(2)] public int fourStarAdvantage = 3;
         [Min(3)] public int fiveStarAdvantage = 6;
+        public int[] trapTiles = new int[0];
+        [Range(1, 10)] public int trapCharges = 1;
+        public int[] unlockFrom = new int[0];
 
         public LevelDefinition ToDefinition() => new LevelDefinition(name, mode, supply,
             captureTarget, duration, scrambleMoves, enemyTotal, enemyInterval,
-            fourStarTimeFraction, fiveStarTimeFraction, fourStarAdvantage, fiveStarAdvantage);
+            fourStarTimeFraction, fiveStarTimeFraction, fourStarAdvantage, fiveStarAdvantage,
+            trapTiles, trapCharges, unlockFrom);
 
         public static LevelSettings[] Defaults() => new[]
         {
             new LevelSettings { name = "Перша облога" },
             new LevelSettings { name = "Збір захисників", mode = LevelMode.Defense,
-                supply = 20, duration = 120, scrambleMoves = 16, enemyTotal = 10, enemyInterval = 8 },
+                supply = 20, duration = 120, scrambleMoves = 16, enemyTotal = 10, enemyInterval = 8, unlockFrom = new[] { 0 } },
             new LevelSettings { name = "Укріплений замок", supply = 24, captureTarget = 16,
-                duration = 105, scrambleMoves = 32 },
+                duration = 105, scrambleMoves = 32, trapTiles = new[] { 6 }, unlockFrom = new[] { 0 } },
             new LevelSettings { name = "Ворог на кордоні", mode = LevelMode.Defense,
-                supply = 24, duration = 105, scrambleMoves = 28, enemyTotal = 16, enemyInterval = 5 },
+                supply = 24, duration = 105, scrambleMoves = 28, enemyTotal = 16, enemyInterval = 5, trapTiles = new[] { 6 }, unlockFrom = new[] { 2 } },
             new LevelSettings { name = "Велика облога", supply = 32, captureTarget = 22,
-                duration = 90, scrambleMoves = 40 },
+                duration = 90, scrambleMoves = 40, trapTiles = new[] { 6, 10 }, unlockFrom = new[] { 0 } },
             new LevelSettings { name = "Останній рубіж", mode = LevelMode.Defense,
-                supply = 32, duration = 90, scrambleMoves = 36, enemyTotal = 22, enemyInterval = 3 }
+                supply = 32, duration = 90, scrambleMoves = 36, enemyTotal = 22, enemyInterval = 3, trapTiles = new[] { 6, 10 }, unlockFrom = new[] { 4 } }
         };
     }
 }

@@ -41,13 +41,13 @@ namespace Pyatnashki
 
         public static void Board(Transform parent)
         {
-            Shape("Board Shadow", parent, new Vector2(3, -7), new Vector2(628, 628), new Color(0.04f, 0.06f, 0.04f));
-            Shape("Timber Frame", parent, Vector2.zero, new Vector2(620, 620), Wood);
-            Shape("Frame Inlay", parent, Vector2.zero, new Vector2(606, 606), new Color(0.57f, 0.43f, 0.23f));
+            Shape("Board Shadow", parent, new Vector2(3, -7), new Vector2(688, 688), new Color(0.04f, 0.06f, 0.04f));
+            Shape("Timber Frame", parent, Vector2.zero, new Vector2(680, 680), Wood);
+            Shape("Frame Inlay", parent, Vector2.zero, new Vector2(672, 672), new Color(0.57f, 0.43f, 0.23f));
             foreach (int x in new[] { -1, 1 }) foreach (int y in new[] { -1, 1 })
             {
-                Shape("Corner Iron", parent, new Vector2(x * 302, y * 302), new Vector2(18, 18), Dark);
-                Shape("Corner Rivet", parent, new Vector2(x * 302, y * 302), new Vector2(5, 5), Gold);
+                Shape("Corner Iron", parent, new Vector2(x * 332, y * 332), new Vector2(18, 18), Dark);
+                Shape("Corner Rivet", parent, new Vector2(x * 332, y * 332), new Vector2(5, 5), Gold);
             }
         }
 
@@ -126,6 +126,52 @@ namespace Pyatnashki
                     i == 0 ? new Color(0.25f, 0.49f, 0.77f) : i == 1 ? PrototypeArt.Gold : new Color(0.73f, 0.75f, 0.63f));
                 var legionary = Shape("Legionary", parent, new Vector2(28 + i * 19, -47), new Vector2(18, 18), Color.clear);
                 Warrior(legionary, true);
+            }
+        }
+
+        public static void Camp(Transform parent)
+        {
+            Shape("Camp Ground", parent, Vector2.zero, new Vector2(118, 66), Wood);
+            Shape("Tent Canvas", parent, new Vector2(0, 5), new Vector2(85, 48), new Color(0.57f, 0.38f, 0.19f));
+            Shape("Tent Entrance", parent, new Vector2(0, -6), new Vector2(24, 33), Dark);
+            Shape("Tent Ridge", parent, new Vector2(0, 31), new Vector2(98, 7), Gold);
+            Shape("Camp Standard", parent, new Vector2(-50, 28), new Vector2(3, 48), Wood);
+            Shape("Camp Banner", parent, new Vector2(-42, 43), new Vector2(18, 12), new Color(0.70f, 0.24f, 0.18f));
+        }
+
+        public static void CastleFront(Transform parent, int strength, int terrain, int economy, int diplomacy)
+        {
+            Color stone = Color.Lerp(new Color(0.42f, 0.44f, 0.37f), Parchment, strength * 0.08f);
+            Shape("Front Wall", parent, Vector2.zero, new Vector2(650, 108), stone);
+            for (int i = -6; i <= 6; i++)
+                Shape("Front Battlement", parent, new Vector2(i * 49, 60 + strength * 2), new Vector2(30, 17), stone);
+            foreach (int side in new[] { -1, 1 })
+            {
+                Shape("Front Tower", parent, new Vector2(side * 284, 2), new Vector2(72, 126), stone);
+                Shape("Tower Slit", parent, new Vector2(side * 284, 10), new Vector2(8, 30), Dark);
+            }
+            for (int i = 0; i <= strength; i++)
+                Shape("Wall Reinforcement", parent, new Vector2(0, -20 + i * 17), new Vector2(640, 4), Wood);
+            Shape("Gate Arch", parent, new Vector2(-80, -27), new Vector2(70, 76), Wood);
+            Shape("Gate", parent, new Vector2(-80, -35), new Vector2(48, 64), Dark);
+            if (terrain > 0)
+            {
+                Shape("Front Moat", parent, new Vector2(0, -76), new Vector2(650, 7 + terrain * 3), new Color(0.23f, 0.42f, 0.47f));
+                Shape("Front Bridge", parent, new Vector2(-80, -76), new Vector2(52, 12 + terrain * 3), Wood);
+                for (int i = 0; i < terrain; i++) foreach (int side in new[] { -1, 1 })
+                    Shape("Front Rock", parent, new Vector2(side * (140 + i * 38), -60), new Vector2(20, 18), new Color(0.32f, 0.36f, 0.30f));
+            }
+            for (int i = 0; i < economy; i++)
+            {
+                Shape("Market", parent, new Vector2(20 + i * 50, -36), new Vector2(35, 28), Wood);
+                Shape("Market Roof", parent, new Vector2(20 + i * 50, -18), new Vector2(42, 9), Gold);
+            }
+            for (int i = 0; i < diplomacy; i++)
+            {
+                Shape("Ally Standard", parent, new Vector2(140 + i * 45, 36), new Vector2(3, 55), Wood);
+                Shape("Ally Banner", parent, new Vector2(150 + i * 45, 50), new Vector2(22, 18), new Color(0.22f, 0.48f, 0.75f));
+                var soldier = Shape("Gate Legionary", parent, new Vector2(-125 - i * 22, -56), new Vector2(18, 18), Color.clear);
+                Warrior(soldier, true);
             }
         }
 
