@@ -5,6 +5,41 @@ namespace Pyatnashki.Tests
 {
     public class KingdomEconomyTests
     {
+        [Test]
+        public void FourTrackSavesMigrateWithoutLosingGoldOrCapital()
+        {
+            var save = Owned().Export();
+            save.gold = 5000;
+            save.capital = new[] { 2, 1, 3, 2 };
+            var economy = new KingdomEconomy(Definitions(), 0, save);
+            Assert.That(economy.Gold, Is.EqualTo(5000));
+            Assert.That(economy.GetCapital(CapitalStat.Strength), Is.EqualTo(2));
+            Assert.That(economy.StorageHours, Is.EqualTo(18));
+            Assert.That(economy.SpawnSpeedMultiplier, Is.EqualTo(1));
+            Assert.That(economy.MovementSpeedMultiplier, Is.EqualTo(1));
+            Assert.That(economy.Export().capital.Length, Is.EqualTo(6));
+        }
+
+        [Test]
+        public void ArmyTracksAreIndependentCappedAndPersistWithoutChangingIncome()
+        {
+            var save = Owned().Export(); save.gold = 5000;
+            var economy = new KingdomEconomy(Definitions(), 0, save);
+            for (int i = 0; i < 3; i++)
+            {
+                Assert.That(economy.TryUpgrade(CapitalStat.Reinforcements, 0), Is.True);
+                Assert.That(economy.TryUpgrade(CapitalStat.Marching, 0), Is.True);
+            }
+            Assert.That(economy.Gold, Is.EqualTo(2900));
+            Assert.That(economy.SpawnSpeedMultiplier, Is.EqualTo(1.45).Within(0.00001));
+            Assert.That(economy.MovementSpeedMultiplier, Is.EqualTo(1.3).Within(0.00001));
+            Assert.That(economy.GetHourlyIncome(0), Is.EqualTo(20));
+            Assert.That(economy.TryUpgrade(CapitalStat.Marching, 0), Is.False);
+            var reloaded = new KingdomEconomy(Definitions(), 0, economy.Export());
+            Assert.That(reloaded.GetCapital(CapitalStat.Reinforcements), Is.EqualTo(3));
+            Assert.That(reloaded.MovementSpeedMultiplier, Is.EqualTo(1.3).Within(0.00001));
+        }
+
         private static SettlementDefinition[] Definitions() => new[]
         { new SettlementDefinition("village", "Village", SettlementKind.Village, 0, 1, 20) };
         private static KingdomEconomy Owned(long time = 0, int capture = 3, int defense = 0)

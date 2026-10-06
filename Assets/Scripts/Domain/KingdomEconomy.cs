@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Pyatnashki.Domain
 {
-    public enum CapitalStat { Strength, Terrain, Economy, Diplomacy }
+    public enum CapitalStat { Strength, Terrain, Economy, Diplomacy, Reinforcements, Marching }
     public enum SettlementKind { Village, TradingTown, BorderFort }
 
     public sealed class SettlementDefinition
@@ -39,7 +39,7 @@ namespace Pyatnashki.Domain
     {
         public int version = 1;
         public long gold, lastUtcSeconds;
-        public int[] capital = new int[4];
+        public int[] capital = new int[6];
         public SettlementSave[] settlements;
     }
 
@@ -48,11 +48,13 @@ namespace Pyatnashki.Domain
     {
         private readonly SettlementDefinition[] definitions;
         private readonly SettlementSave[] states;
-        private readonly int[] capital = new int[4];
+        private readonly int[] capital = new int[6];
         public long Gold { get; private set; }
         public long LastUtcSeconds { get; private set; }
         public int Count => definitions.Length;
         public double StorageHours => 12 + GetCapital(CapitalStat.Economy) * 2;
+        public double SpawnSpeedMultiplier => 1 + GetCapital(CapitalStat.Reinforcements) * 0.15;
+        public double MovementSpeedMultiplier => 1 + GetCapital(CapitalStat.Marching) * 0.10;
 
         public KingdomEconomy(SettlementDefinition[] settlements, long nowUtcSeconds, KingdomSave save = null)
         {
@@ -65,10 +67,12 @@ namespace Pyatnashki.Domain
                 if (definitions[i] == null || !ids.Add(definitions[i].Id)) throw new ArgumentException("Settlement IDs must be unique.");
             if (save != null)
             {
-                if (save.version != 1 || save.gold < 0 || save.lastUtcSeconds < 0 || save.capital == null || save.capital.Length != 4)
+                // Four-track saves predate army upgrades; new tracks migrate at tier zero.
+                if (save.version != 1 || save.gold < 0 || save.lastUtcSeconds < 0 || save.capital == null
+                    || (save.capital.Length != 4 && save.capital.Length != 6))
                     throw new ArgumentException("Invalid kingdom save.");
                 Gold = save.gold;
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < save.capital.Length; i++)
                 {
                     if (save.capital[i] < 0 || save.capital[i] > 3) throw new ArgumentException("Invalid capital tier.");
                     capital[i] = save.capital[i];
@@ -97,7 +101,7 @@ namespace Pyatnashki.Domain
         public int GetControlStars(int index) { Check(index); return Math.Max(states[index].captureStars, states[index].defenseStars); }
         public int GetCapital(CapitalStat stat)
         {
-            if ((int)stat < 0 || (int)stat >= 4) throw new ArgumentOutOfRangeException(nameof(stat));
+            if ((int)stat < 0 || (int)stat >= capital.Length) throw new ArgumentOutOfRangeException(nameof(stat));
             return capital[(int)stat];
         }
         public double GetHourlyIncome(int index)

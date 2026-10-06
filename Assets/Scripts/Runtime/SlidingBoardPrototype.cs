@@ -25,6 +25,9 @@ namespace Pyatnashki
         private float economyClock, economySaveClock;
         private const string EconomyKey = "Pyatnashki.Kingdom.v1";
         private static long UtcSeconds() => System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        private float ArmyMovementMultiplier => diagnosticRound ? 1f : (float)economy.MovementSpeedMultiplier;
+        private float ArmySpawnInterval => Mathf.Max(0.05f, waveSpawnInterval
+            / (diagnosticRound ? 1f : (float)economy.SpawnSpeedMultiplier));
         private bool practiceRound;
         private const string LegacyProgressKey = "Pyatnashki.Campaign.Unlocked.v1";
         private const string StarsVersionKey = "Pyatnashki.Campaign.Stars.v2";
@@ -78,7 +81,7 @@ namespace Pyatnashki
         private RectTransform canvasRect, safeRect, contentRect, boardRect, emptyMarker;
         private GameObject finalTile;
         private Font font;
-        private Text movesText, correctText, routeText, statusText, warriorText;
+        private Text movesText, correctText, routeText, statusText, warriorText, armyBonusText;
         private Button shuffleButton, practiceButton, sendWarriorButton, carryTestButton, capacityTestButton;
         private bool busy;
         private int inputVersion;
@@ -91,7 +94,7 @@ namespace Pyatnashki
             public RectTransform Marker;
             public WarriorMotion Motion;
             public Vector2 Start, End, ReturnStart, ReturnTarget, DestinationCentre;
-            public float Elapsed, Cooldown, ReturnElapsed;
+            public float Elapsed, Cooldown, ReturnElapsed, Duration;
             public int Destination;
             public bool Entered, Returning;
         }
@@ -301,20 +304,28 @@ namespace Pyatnashki
             kingdomView.Configure(economy, font,
                 () => { economy.Collect(UtcSeconds()); SaveEconomy(); },
                 stat => { bool purchased = economy.TryUpgrade(stat, UtcSeconds());
-                    if (purchased) { SaveEconomy(); RefreshCapitalCastle(); } return purchased; },
+                    if (purchased)
+                    {
+                        SaveEconomy(); RefreshCapitalCastle();
+                        entryClock = Mathf.Min(entryClock, ArmySpawnInterval);
+                    }
+                    return purchased; },
                 () => { inputVersion++; kingdomView.Hide(); });
             kingdomView.Hide();
         }
 
         private void RefreshCapitalCastle()
         {
+            if (armyBonusText != null)
+                armyBonusText.text = "Вихід ×" + (diagnosticRound ? 1 : economy.SpawnSpeedMultiplier).ToString("0.00")
+                    + " · Рух ×" + ArmyMovementMultiplier.ToString("0.00");
             if (capitalCastle == null) return;
             foreach (Transform child in capitalCastle) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
             PrototypeArt.Capital(capitalCastle,
-                Defense ? economy.GetCapital(CapitalStat.Strength) : 0,
-                Defense ? economy.GetCapital(CapitalStat.Terrain) : 0,
-                Defense ? economy.GetCapital(CapitalStat.Economy) : 0,
-                Defense ? economy.GetCapital(CapitalStat.Diplomacy) : 0);
+                economy.GetCapital(CapitalStat.Strength),
+                economy.GetCapital(CapitalStat.Terrain),
+                economy.GetCapital(CapitalStat.Economy),
+                economy.GetCapital(CapitalStat.Diplomacy));
         }
 
         private void LoadProgress()
@@ -588,6 +599,7 @@ namespace Pyatnashki
             RefreshCapitalCastle();
             castleArrow = Label("Castle Arrow", contentRect, new Vector2(-72, 250), new Vector2(44, 44), "↑", 36, Gold);
             routeText = Label("Route", contentRect, new Vector2(190, 310), new Vector2(260, 70), "", 19, Ink);
+            armyBonusText = Label("Army Bonuses", contentRect, new Vector2(190, 260), new Vector2(260, 28), "", 15, Gold);
             goalText = Label("Goal", contentRect, new Vector2(-115, -425), new Vector2(390, 72), "", 20, Muted);
         }
 
@@ -823,7 +835,7 @@ namespace Pyatnashki
             w.Model.CancelReservation();
             Vector3 worldPosition = w.Marker.position;
             w.Motion = WarriorMotion.None;
-            w.Cooldown = 0.2f;
+            w.Cooldown = 0.2f / ArmyMovementMultiplier;
             w.Marker.SetParent(w.Model.CurrentTile == 0 ? boardRect
                 : TileTransform(w.Model.CurrentTile), false);
             w.Marker.position = worldPosition;
@@ -844,7 +856,7 @@ namespace Pyatnashki
             if (t < 1f) return;
             w.Marker.anchoredPosition = w.ReturnTarget;
             w.Returning = false;
-            w.Cooldown = 0.2f;
+            w.Cooldown = 0.2f / ArmyMovementMultiplier;
         }
 
         private void PlanWarriorMotion(WarriorView w)
@@ -874,13 +886,15 @@ namespace Pyatnashki
         private void BeginWarriorMotion(WarriorView w, WarriorMotion motion, int destination, Vector2 start, Vector2 end)
         {
             if (motion != WarriorMotion.Exit && !w.Model.ReserveDestination(board, finalTile.activeSelf, destination)) return;
-            if (motion == WarriorMotion.Enter) entryClock = waveSpawnInterval;
+            if (motion == WarriorMotion.Enter) entryClock = ArmySpawnInterval;
             w.DestinationCentre = destination == 0 ? end : CellPosition(TileCell(destination));
             w.Motion = motion;
             w.Destination = destination;
             w.Start = start;
             w.End = end;
             w.Elapsed = 0f;
+            // Snapshot each segment to avoid a position jump when buying an upgrade mid-round.
+            w.Duration = Mathf.Max(0.05f, warriorStepDuration / ArmyMovementMultiplier);
             w.Entered = false;
             w.Marker.SetParent(boardRect, false);
             w.Marker.SetAsLastSibling();
@@ -890,7 +904,7 @@ namespace Pyatnashki
         private void AdvanceWarriorMotion(WarriorView w)
         {
             w.Elapsed += Time.unscaledDeltaTime;
-            float progress = Mathf.Clamp01(w.Elapsed / Mathf.Max(0.05f, warriorStepDuration));
+            float progress = Mathf.Clamp01(w.Elapsed / w.Duration);
             w.Marker.anchoredPosition = Vector2.Lerp(w.Start, w.End, progress);
             if (!TryTransferWarriorOwnership(w))
             {
@@ -905,7 +919,7 @@ namespace Pyatnashki
                 if (!diagnosticRound) round.RecordDelivery();
             }
             w.Motion = WarriorMotion.None;
-            w.Cooldown = 0.2f;
+            w.Cooldown = 0.2f / ArmyMovementMultiplier;
             BindWarriorMarker(w);
         }
 

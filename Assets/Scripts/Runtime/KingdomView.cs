@@ -67,21 +67,34 @@ namespace Pyatnashki
                 long before = economy.Gold; collect();
                 feedback.text = "Зібрано: " + (economy.Gold - before) + " золота"; Refresh();
             });
-            upgradeButtons = new Button[4]; upgradeLabels = new Text[4];
-            for (int i = 0; i < 4; i++)
+            var upgradeViewport = PrototypeArt.Shape("Upgrade Viewport", transform, new Vector2(0, -230), new Vector2(650, 410), PrototypeArt.Dark);
+            upgradeViewport.raycastTarget = true;
+            upgradeViewport.gameObject.AddComponent<RectMask2D>();
+            var upgradeContent = PrototypeArt.Shape("Upgrade List", upgradeViewport.transform, Vector2.zero, new Vector2(640, 570), Color.clear).rectTransform;
+            upgradeContent.anchorMin = upgradeContent.anchorMax = new Vector2(0.5f, 1);
+            upgradeContent.pivot = new Vector2(0.5f, 1);
+            var upgradeScroll = upgradeViewport.gameObject.AddComponent<ScrollRect>();
+            upgradeScroll.viewport = upgradeViewport.rectTransform; upgradeScroll.content = upgradeContent;
+            upgradeScroll.horizontal = false; upgradeScroll.movementType = ScrollRect.MovementType.Clamped;
+            upgradeButtons = new Button[6]; upgradeLabels = new Text[6];
+            for (int i = 0; i < 6; i++)
             {
                 CapitalStat stat = (CapitalStat)i;
-                upgradeButtons[i] = ButtonAt("Upgrade " + stat, new Vector2(0, -75 - i * 95), new Vector2(630, 80), "", () =>
+                upgradeButtons[i] = ButtonAt("Upgrade " + stat, new Vector2(0, -45 - i * 95), new Vector2(630, 80), "", () =>
                 {
                     bool purchased = upgrade(stat);
                     feedback.text = purchased ? "Столицю покращено" : "Покращення недоступне"; RebuildCapital(); Refresh();
                 });
+                var upgradeRect = upgradeButtons[i].GetComponent<RectTransform>();
+                upgradeRect.SetParent(upgradeContent, false);
+                upgradeRect.anchorMin = upgradeRect.anchorMax = new Vector2(0.5f, 1);
+                upgradeRect.anchoredPosition = new Vector2(0, -45 - i * 95);
                 upgradeLabels[i] = TextAt("Caption", upgradeButtons[i].transform, Vector2.zero, new Vector2(610, 76), "", 18, PrototypeArt.Parchment);
             }
             feedback = TextAt("Feedback", transform, new Vector2(0, -470), new Vector2(650, 55), "Данина накопичується й без гри. Землі залишаються твоїми.", 17, PrototypeArt.Muted);
             ButtonAt("Close", new Vector2(0, -565), new Vector2(350, 60), "Повернутися", () => close());
             TextAt("Prototype Note", transform, new Vector2(0, -640), new Vector2(650, 50),
-                "Міцність, підступи й дипломатія змінюють вигляд.\nБойові бонуси — наступний етап.", 16, PrototypeArt.Muted);
+                "Прокрути покращення вниз для розвитку війська.\nТемп виходу та швидкість руху діють на полі.", 16, PrototypeArt.Muted);
             RebuildCapital(); Refresh();
         }
 
@@ -113,9 +126,9 @@ namespace Pyatnashki
                         + (economy.IsSecured(i) ? " · захищено" : "")
                     : " · приєднати: рівень " + (d.CaptureLevel + 1) + " на 3★");
             }
-            string[] names = { "Міцність", "Неприступність", "Економічний розвиток", "Міжнародні відносини" };
-            string[] effects = { "Стіни та башти", "Рів та скелясті підступи", "+10% данини і +2 год запасу за ступінь", "Прапори союзників і легіонери" };
-            for (int i = 0; i < 4; i++)
+            string[] names = { "Міцність", "Неприступність", "Економічний розвиток", "Міжнародні відносини", "Військо: підкріплення", "Військо: маршова підготовка" };
+            string[] effects = { "Стіни та башти", "Рів та скелясті підступи", "+10% данини і +2 год запасу за ступінь", "Прапори союзників і легіонери", "+15% темпу виходу за ступінь", "+10% швидкості руху за ступінь" };
+            for (int i = 0; i < 6; i++)
             {
                 int tier = economy.GetCapital((CapitalStat)i), cost = economy.UpgradeCost((CapitalStat)i);
                 upgradeLabels[i].text = names[i] + " · " + tier + "/3 · " + (tier == 3 ? "МАКСИМУМ" : cost + " золота") + "\n" + effects[i];
