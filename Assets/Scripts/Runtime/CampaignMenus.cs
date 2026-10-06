@@ -123,6 +123,8 @@ namespace Pyatnashki
             atlasScroll.inertia = false; atlasScroll.scrollSensitivity = 70;
             atlasScroll.movementType = ScrollRect.MovementType.Clamped;
             var terrain = MakeRect("Atlas Terrain", map, new Vector2(0, height * 0.5f), new Vector2(650, height));
+            // The renderer must exist before Graphic.OnEnable registers this mesh for clipping.
+            terrain.gameObject.AddComponent<CanvasRenderer>();
             terrain.gameObject.AddComponent<AtlasTerrainGraphic>().raycastTarget = false;
             Label("Compass", map, new Vector2(260, height - 85), new Vector2(80, 90), "ПН\n↑\nПД", 22, Gold);
             Label("Northern Lands", map, new Vector2(-80, height - 85), new Vector2(300, 45), "ПІВНІЧНІ ЗЕМЛІ", 20, PrototypeArt.Dark, FontStyle.Bold);

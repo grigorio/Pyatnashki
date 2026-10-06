@@ -4,6 +4,7 @@ using UnityEngine.UI;
 namespace Pyatnashki
 {
     /// <summary>Procedural top-down atlas: one decorative mesh, no input or imported texture.</summary>
+    [RequireComponent(typeof(RectTransform), typeof(CanvasRenderer))]
     public sealed class AtlasTerrainGraphic : MaskableGraphic
     {
         protected override void OnPopulateMesh(VertexHelper mesh)
