@@ -1,0 +1,7 @@
+{
+  "name": "Pyatnashki.Domain",
+  "rootNamespace": "Pyatnashki.Domain",
+  "references": [],
+  "autoReferenced": true,
+  "noEngineReferences": true
+}

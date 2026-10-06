@@ -350,3 +350,153 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &200000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 200000002}
+  - component: {fileID: 200000003}
+  m_Layer: 0
+  m_Name: Sliding Board Prototype
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &200000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000001}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 2
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &200000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab7a88d92410466ea15387d400000008, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  slideDuration: 0.16
+  commanderChance: 0.08
+  cartographerChance: 0.06
+  levels:
+  - name: Перша облога
+    mode: 0
+    supply: 20
+    captureTarget: 12
+    duration: 120
+    scrambleMoves: 24
+    enemyTotal: 10
+    enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles: []
+    unlockFrom: []
+  - name: Збір захисників
+    mode: 1
+    supply: 20
+    captureTarget: 12
+    duration: 120
+    scrambleMoves: 16
+    enemyTotal: 10
+    enemyInterval: 8
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles: []
+    unlockFrom:
+    - 0
+  - name: Укріплений замок
+    mode: 0
+    supply: 24
+    captureTarget: 16
+    duration: 105
+    scrambleMoves: 32
+    enemyTotal: 10
+    enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    unlockFrom:
+    - 0
+  - name: Ворог на кордоні
+    mode: 1
+    supply: 24
+    captureTarget: 12
+    duration: 105
+    scrambleMoves: 28
+    enemyTotal: 16
+    enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    unlockFrom:
+    - 2
+  - name: Велика облога
+    mode: 0
+    supply: 32
+    captureTarget: 22
+    duration: 90
+    scrambleMoves: 40
+    enemyTotal: 10
+    enemyInterval: 5
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    - 10
+    unlockFrom:
+    - 0
+  - name: Останній рубіж
+    mode: 1
+    supply: 32
+    captureTarget: 12
+    duration: 90
+    scrambleMoves: 36
+    enemyTotal: 22
+    enemyInterval: 3
+    fourStarTimeFraction: 0.25
+    fiveStarTimeFraction: 0.5
+    fourStarAdvantage: 3
+    fiveStarAdvantage: 6
+    trapCharges: 1
+    trapTiles:
+    - 6
+    - 10
+    unlockFrom:
+    - 4
+  unlockAllLevelsForDevelopment: 0
