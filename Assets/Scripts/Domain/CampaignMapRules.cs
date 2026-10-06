@@ -49,11 +49,13 @@ namespace Pyatnashki.Domain
     public sealed class TrapLedger
     {
         private readonly Dictionary<int, int> remaining = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> initial = new Dictionary<int, int>();
         public TrapLedger(LevelDefinition level)
         {
-            foreach (int tile in level.TrapTiles) remaining[tile] = level.TrapCharges;
+            foreach (int tile in level.TrapTiles) initial[tile] = remaining[tile] = level.TrapCharges;
         }
         public int GetCharges(int tile) => remaining.TryGetValue(tile, out int count) ? count : 0;
+        public int GetDeaths(int tile) => initial.TryGetValue(tile, out int count) ? count - GetCharges(tile) : 0;
         public bool Trigger(int tile)
         {
             int count = GetCharges(tile);

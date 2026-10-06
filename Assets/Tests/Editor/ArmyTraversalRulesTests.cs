@@ -24,6 +24,7 @@ namespace Pyatnashki.Tests
             var specialist = new WarriorSimulation(avoidTile: tile => armed && tile == 12);
             Assert.That(specialist.TryEnter(board, true), Is.True);
             Assert.That(specialist.GetNextTile(board, true), Is.Zero);
+            Assert.That(specialist.InspectNextRoadTile(board, true), Is.EqualTo(12));
             Assert.That(specialist.ReserveDestination(board, true, 12), Is.False);
             Assert.That(specialist.TryMoveTo(board, true, 12), Is.False);
             Assert.That(specialist.Occupancy.GetReservedCount(12), Is.Zero);

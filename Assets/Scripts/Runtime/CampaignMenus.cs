@@ -17,8 +17,6 @@ namespace Pyatnashki
         private int[] deployment;
         private TrapLedger traps;
         private int casualtiesThisRound;
-        private readonly Text[] trapSigns = new Text[17];
-        private readonly GameObject[] trapMarks = new GameObject[17];
         private readonly System.Collections.Generic.List<Text> mapLevelLabels
             = new System.Collections.Generic.List<Text>();
         private readonly System.Collections.Generic.Dictionary<int, Image> mapRegions

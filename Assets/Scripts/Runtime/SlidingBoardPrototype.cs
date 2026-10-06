@@ -97,7 +97,11 @@ namespace Pyatnashki
             public int Id;
             public WarriorRole Role;
             public WarriorSimulation Model;
-            public RectTransform Marker;
+            public RectTransform Marker, Speech;
+            public Text SpeechText;
+            public CanvasGroup SpeechAlpha;
+            public float SpeechRemaining;
+            public readonly HashSet<int> WarnedTraps = new HashSet<int>();
             public WarriorMotion Motion;
             public Vector2 Start, End, ReturnStart, ReturnTarget, DestinationCentre;
             public float Elapsed, Cooldown, ReturnElapsed, Duration, ReturnDuration;
@@ -171,7 +175,7 @@ namespace Pyatnashki
             RefreshWarriorInterface();
         }
 
-        private void LateUpdate() => FitSafeArea();
+        private void LateUpdate() { FitSafeArea(); UpdateHazardFeedback(); }
 
         private void StartLevel(int index, bool practice = false)
         {
@@ -483,16 +487,7 @@ namespace Pyatnashki
                 tileBorders[tile] = button.GetComponent<Outline>();
                 PrototypeArt.Terrain(tile, tiles[tile]);
                 BuildRoad(tile, tiles[tile]);
-                trapSigns[tile] = Label("Trap Warning", tiles[tile], new Vector2(0, -29), new Vector2(108, 20), "", 13,
-                    new Color(1f, 0.35f, 0.25f), FontStyle.Bold);
-                var trapMark = MakeRect("Trap Spikes", tiles[tile], Vector2.zero, Vector2.zero);
-                foreach (int side in new[] { -1, 1 })
-                {
-                    var spike = PrototypeArt.Shape("Spike", trapMark, Vector2.zero, new Vector2(30, 5), new Color(0.78f, 0.22f, 0.14f));
-                    spike.rectTransform.localRotation = Quaternion.Euler(0, 0, side * 45);
-                }
-                trapMarks[tile] = trapMark.gameObject;
-                trapMark.gameObject.SetActive(false);
+                BuildHazardVisuals(tile, tiles[tile]);
                 PrototypeArt.Badge(tiles[tile], new Vector2(-43, 48), new Vector2(38, 28));
                 PrototypeArt.Badge(tiles[tile], new Vector2(-42, -49), new Vector2(46, 22));
                 PrototypeArt.Badge(tiles[tile], new Vector2(46, -49), new Vector2(26, 22));
@@ -690,7 +685,9 @@ namespace Pyatnashki
                 bool movable = !busy && !RoundEnded && !board.IsSolved && board.CanMoveTile(tile);
                 buttons[tile].interactable = movable;
                 bool correct = board.GetIndexOf(tile) == tile - 1;
-                images[tile].color = PrototypeArt.TerrainColor(tile);
+                images[tile].color = traps != null && traps.GetCharges(tile) > 0
+                    ? Color.Lerp(PrototypeArt.TerrainColor(tile), new Color(0.65f, 0.12f, 0.08f), 0.48f)
+                    : PrototypeArt.TerrainColor(tile);
                 tileBorders[tile].effectColor = movable ? Gold : correct
                     ? new Color(0.55f, 0.78f, 0.42f) : new Color(0.25f, 0.30f, 0.18f);
                 tileBorders[tile].effectDistance = movable ? new Vector2(3, -3) : new Vector2(1, -1);
@@ -747,6 +744,7 @@ namespace Pyatnashki
                 w.Model.Reset();
                 w.Marker.gameObject.SetActive(false);
                 Destroy(w.Marker.gameObject);
+                if (w.Speech != null) { w.Speech.gameObject.SetActive(false); Destroy(w.Speech.gameObject); }
             }
             warriors.Clear();
             occupancy.Clear();
@@ -863,6 +861,7 @@ namespace Pyatnashki
         private void PlanWarriorMotion(WarriorView w)
         {
             if (w.Model.Completed) return;
+            WarnIfTrapAhead(w);
             bool finalPresent = finalTile.activeSelf;
             if (w.Model.CurrentTile == 0)
             {
@@ -948,21 +947,12 @@ namespace Pyatnashki
                 round.RecordCasualty();
                 if (!practiceRound) { economy.LoseWarrior(); SaveEconomy(); }
                 RefreshTrapSigns();
-                statusText.text = "Пастка спрацювала! Втрати: " + casualtiesThisRound;
+                statusText.text = "Пастка спрацювала! На плитці залишено відмітку загиблих. Втрати: " + casualtiesThisRound;
             }
             return w.Entered;
         }
 
-        private void RefreshTrapSigns()
-        {
-            for (int tile = 1; tile <= 15; tile++)
-            {
-                if (trapSigns[tile] == null) continue;
-                int charges = traps == null ? 0 : traps.GetCharges(tile);
-                trapSigns[tile].text = charges > 0 ? "ПАСТКА ×" + charges : "";
-                trapMarks[tile].SetActive(charges > 0);
-            }
-        }
+        private void RefreshTrapSigns() => RefreshHazardVisuals();
 
         private void BuildRoad(int tile, RectTransform parent)
         {

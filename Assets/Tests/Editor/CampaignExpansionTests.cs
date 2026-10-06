@@ -34,10 +34,32 @@ namespace Pyatnashki.Tests
             Assert.Throws<System.ArgumentException>(() => level.WithSupply(13));
             Assert.That(level.WithSupply(14).Supply, Is.EqualTo(14));
             var ledger = new TrapLedger(level);
+            Assert.That(ledger.GetDeaths(6), Is.Zero);
+            Assert.That(ledger.GetDeaths(2), Is.Zero);
             Assert.That(ledger.Trigger(6), Is.True);
+            Assert.That(ledger.GetDeaths(6), Is.EqualTo(1));
             Assert.That(ledger.Trigger(6), Is.False);
+            Assert.That(ledger.GetDeaths(6), Is.EqualTo(1));
             Assert.That(ledger.Trigger(10), Is.True);
             Assert.That(new TrapLedger(level).GetCharges(6), Is.EqualTo(1));
+            Assert.That(new TrapLedger(level).GetDeaths(6), Is.Zero);
+        }
+
+        [Test]
+        public void MemorialCountsMultipleDeathsAndStopsAtChargeLimit()
+        {
+            var level = new LevelDefinition("Trap", LevelMode.Capture, 20, 12, 120, 24,
+                trapTiles: new[] { 6 }, trapCharges: 3);
+            var ledger = new TrapLedger(level);
+            for (int count = 1; count <= 3; count++)
+            {
+                Assert.That(ledger.Trigger(6), Is.True);
+                Assert.That(ledger.GetDeaths(6), Is.EqualTo(count));
+                Assert.That(ledger.GetCharges(6), Is.EqualTo(3 - count));
+            }
+            Assert.That(ledger.Trigger(6), Is.False);
+            Assert.That(ledger.GetDeaths(6), Is.EqualTo(3));
+            Assert.That(new TrapLedger(level).GetDeaths(6), Is.Zero);
         }
 
         [Test]

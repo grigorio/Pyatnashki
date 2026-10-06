@@ -240,8 +240,15 @@ namespace Pyatnashki.Domain
             return FindNextTile(board, finalTilePresent, true, true);
         }
 
+        /// <summary>Inspect the next nominal road tile for a warning; this never grants movement permission.</summary>
+        public int InspectNextRoadTile(SlidingBoard board, bool finalTilePresent)
+        {
+            int next = FindNextTile(board, finalTilePresent, false, false, false);
+            return next != 0 ? next : FindNextTile(board, finalTilePresent, true, true, false);
+        }
+
         private int FindNextTile(SlidingBoard board, bool finalTilePresent,
-            bool respectCapacity, bool allowExploration)
+            bool respectCapacity, bool allowExploration, bool respectHazards = true)
         {
             int start = GetCurrentCell(board, finalTilePresent);
             if (start < 0 || CanDeliver(board, finalTilePresent)) return 0;
@@ -265,7 +272,7 @@ namespace Pyatnashki.Domain
                 {
                     if (!RoadNetwork.TryGetNeighbor(cell, direction, out int next) || parents[next] >= 0) continue;
                     int nextTile = RoadNetwork.GetTileAt(board, next, finalTilePresent);
-                    if (nextTile == 0 || (avoidTile?.Invoke(nextTile) ?? false) || (respectCapacity && !Occupancy.HasSpace(nextTile))
+                    if (nextTile == 0 || (respectHazards && (avoidTile?.Invoke(nextTile) ?? false)) || (respectCapacity && !Occupancy.HasSpace(nextTile))
                         || !RoadNetwork.AreConnected(RoadLayout.GetPorts(tile),
                             RoadLayout.GetPorts(nextTile), direction)) continue;
                     parents[next] = cell;
