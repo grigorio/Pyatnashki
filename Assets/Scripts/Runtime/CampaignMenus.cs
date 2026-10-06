@@ -15,6 +15,8 @@ namespace Pyatnashki
         private int casualtiesThisRound;
         private readonly Text[] trapSigns = new Text[17];
         private readonly GameObject[] trapMarks = new GameObject[17];
+        private readonly System.Collections.Generic.List<Text> mapLevelLabels
+            = new System.Collections.Generic.List<Text>();
         private readonly System.Collections.Generic.Dictionary<int, Image> mapRegions
             = new System.Collections.Generic.Dictionary<int, Image>();
         private readonly System.Collections.Generic.Dictionary<int, GameObject> mapHouses
@@ -136,6 +138,9 @@ namespace Pyatnashki
                 Vector2 buttonPosition = position + new Vector2(0, campaign[i].Mode == LevelMode.Defense ? -58 : 0);
                 var button = MakeButton("Map Level " + index, map, buttonPosition, new Vector2(280, 52), "", () => SelectMapLevel(index));
                 levelButtons.Add(button);
+                // Empty-caption buttons have no label; create and cache it explicitly before hiding the map.
+                mapLevelLabels.Add(Label("Level Caption", button.transform, Vector2.zero,
+                    new Vector2(270, 48), "", 18, Ink));
             }
             mapDetails = Label("Deployment Details", overlay.rectTransform, new Vector2(0, -195), new Vector2(640, 155), "", 20, Ink);
             MakeButton("Fewer Warriors", overlay.rectTransform, new Vector2(-240, -310), new Vector2(130, 55), "− воїн", () => ChangeDeployment(-1));
@@ -164,10 +169,9 @@ namespace Pyatnashki
                 }
                 levelButtons[i].interactable = available;
                 levelButtons[i].targetGraphic.color = available ? PrototypeArt.Wood : new Color(0.12f, 0.15f, 0.12f);
-                levelButtons[i].GetComponentInChildren<Text>().text = available
+                mapLevelLabels[i].text = available
                     ? (i + 1) + ". " + (campaign[i].Mode == LevelMode.Capture ? SettlementName(i) : "Захист") + " · " + progress.GetBest(i) + "★"
                     : "НЕВІДКРИТА ОБЛАСТЬ";
-                levelButtons[i].GetComponentInChildren<Text>().fontSize = 18;
             }
             mapSummary.text = CampaignMapRules.RulerTitle(OwnedTerritories) + " · Землі: " + OwnedTerritories
                 + "\nВійсько: " + economy.TrainedWarriors + " · Золото: " + economy.Gold;
