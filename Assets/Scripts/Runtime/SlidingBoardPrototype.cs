@@ -685,9 +685,7 @@ namespace Pyatnashki
                 bool movable = !busy && !RoundEnded && !board.IsSolved && board.CanMoveTile(tile);
                 buttons[tile].interactable = movable;
                 bool correct = board.GetIndexOf(tile) == tile - 1;
-                images[tile].color = traps != null && traps.GetCharges(tile) > 0
-                    ? Color.Lerp(PrototypeArt.TerrainColor(tile), new Color(0.65f, 0.12f, 0.08f), 0.48f)
-                    : PrototypeArt.TerrainColor(tile);
+                images[tile].color = PrototypeArt.TerrainColor(tile);
                 tileBorders[tile].effectColor = movable ? Gold : correct
                     ? new Color(0.55f, 0.78f, 0.42f) : new Color(0.25f, 0.30f, 0.18f);
                 tileBorders[tile].effectDistance = movable ? new Vector2(3, -3) : new Vector2(1, -1);

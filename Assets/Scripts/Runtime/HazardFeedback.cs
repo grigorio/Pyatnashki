@@ -6,32 +6,30 @@ namespace Pyatnashki
 {
     public sealed partial class SlidingBoardPrototype
     {
-        private readonly Image[] trapGlows = new Image[17];
         private readonly GameObject[] trapMarks = new GameObject[17];
         private readonly Text[] trapSigns = new Text[17], deathSigns = new Text[17];
         private readonly Image[][] trapFrames = new Image[17][];
-        private static readonly Color Danger = new Color(1f, 0.25f, 0.12f);
+        private static readonly Color Danger = new Color(.56f, .36f, .22f, .45f);
         private static readonly string[] ScoutPhrases = { "Krava thol!", "Vesh' kar!", "Torvak nai!", "Zharu vek!" };
 
         private void BuildHazardVisuals(int tile, RectTransform parent)
         {
-            trapGlows[tile] = Panel("Trap Glow", parent, Vector2.zero, new Vector2(148, 148), Danger);
             trapFrames[tile] = new[] {
-                Panel("Trap North", parent, new Vector2(0, 73), new Vector2(148, 4), Danger),
-                Panel("Trap South", parent, new Vector2(0, -73), new Vector2(148, 4), Danger),
-                Panel("Trap West", parent, new Vector2(-73, 0), new Vector2(4, 148), Danger),
-                Panel("Trap East", parent, new Vector2(73, 0), new Vector2(4, 148), Danger)
+                Panel("Trap North", parent, new Vector2(0, 73), new Vector2(148, 2), Danger),
+                Panel("Trap South", parent, new Vector2(0, -73), new Vector2(148, 2), Danger),
+                Panel("Trap West", parent, new Vector2(-73, 0), new Vector2(2, 148), Danger),
+                Panel("Trap East", parent, new Vector2(73, 0), new Vector2(2, 148), Danger)
             };
-            var badge = Panel("Trap Skull", parent, Vector2.zero, new Vector2(36, 32), new Color(.13f, .06f, .04f, .9f));
+            var badge = Panel("Trap Skull", parent, new Vector2(0, -8), new Vector2(36, 32), new Color(.25f, .22f, .14f, .65f));
+            badge.rectTransform.localScale = Vector3.one * .65f;
             trapMarks[tile] = badge.gameObject;
-            Panel("Skull", badge.transform, new Vector2(0, 3), new Vector2(22, 18), Color.white);
+            Panel("Skull", badge.transform, new Vector2(0, 3), new Vector2(22, 18), new Color(.76f, .71f, .56f));
             Panel("Left Eye", badge.transform, new Vector2(-5, 4), new Vector2(4, 5), Color.black);
             Panel("Right Eye", badge.transform, new Vector2(5, 4), new Vector2(4, 5), Color.black);
-            Panel("Jaw", badge.transform, new Vector2(0, -8), new Vector2(14, 6), Color.white);
-            trapSigns[tile] = Label("Trap Warning", parent, new Vector2(0, -28), new Vector2(144, 23), "", 15, Color.white, FontStyle.Bold);
-            var memorial = Panel("Deaths Memorial", parent, new Vector2(0, 48), new Vector2(42, 25), new Color(.12f, .08f, .06f, .95f));
-            deathSigns[tile] = Label("Death Count", memorial.transform, Vector2.zero, new Vector2(42, 25), "", 16, Color.white);
-            trapGlows[tile].gameObject.SetActive(false);
+            Panel("Jaw", badge.transform, new Vector2(0, -8), new Vector2(14, 6), new Color(.76f, .71f, .56f));
+            trapSigns[tile] = Label("Trap Warning", parent, new Vector2(0, -30), new Vector2(120, 20), "", 12, new Color(.82f, .74f, .57f));
+            var memorial = Panel("Deaths Memorial", parent, new Vector2(0, 48), new Vector2(42, 25), new Color(.25f, .22f, .14f, .8f));
+            deathSigns[tile] = Label("Death Count", memorial.transform, Vector2.zero, new Vector2(42, 25), "", 14, new Color(.85f, .79f, .64f));
             foreach (Image edge in trapFrames[tile]) edge.gameObject.SetActive(false);
             trapMarks[tile].SetActive(false);
             trapSigns[tile].gameObject.SetActive(false);
@@ -42,24 +40,22 @@ namespace Pyatnashki
         {
             for (int tile = 1; tile <= 15; tile++)
             {
-                if (trapGlows[tile] == null) continue;
+                if (trapMarks[tile] == null) continue;
                 int charges = traps == null ? 0 : traps.GetCharges(tile);
                 int deaths = traps == null ? 0 : traps.GetDeaths(tile);
-                bool armed = charges > 0, marked = armed || deaths > 0;
-                trapGlows[tile].gameObject.SetActive(armed);
+                bool armed = charges > 0;
                 foreach (Image edge in trapFrames[tile])
                 {
-                    edge.gameObject.SetActive(marked);
-                    edge.color = armed ? Danger : new Color(.55f, .35f, .28f, .6f);
+                    edge.gameObject.SetActive(armed);
+                    edge.color = Danger;
                 }
-                trapMarks[tile].SetActive(marked);
-                trapSigns[tile].gameObject.SetActive(marked);
-                trapSigns[tile].text = armed ? "ПАСТКА ×" + charges : "ЗАГИБЛІ: " + deaths;
-                trapSigns[tile].color = armed ? Color.white : new Color(.95f, .8f, .65f);
+                trapMarks[tile].SetActive(armed);
+                trapSigns[tile].gameObject.SetActive(armed);
+                trapSigns[tile].text = "Пастка ×" + charges;
+                trapSigns[tile].color = new Color(.82f, .74f, .57f);
                 deathSigns[tile].transform.parent.gameObject.SetActive(deaths > 0);
                 deathSigns[tile].text = "†" + deaths;
-                images[tile].color = armed ? Color.Lerp(PrototypeArt.TerrainColor(tile), new Color(.65f, .12f, .08f), .48f)
-                    : PrototypeArt.TerrainColor(tile);
+                images[tile].color = PrototypeArt.TerrainColor(tile);
             }
         }
 
@@ -91,10 +87,6 @@ namespace Pyatnashki
         private void UpdateHazardFeedback()
         {
             if (boardRect == null) return;
-            float pulse = .14f + .09f * (.5f + .5f * Mathf.Sin(Time.unscaledTime * 4f));
-            for (int tile = 1; tile <= 15; tile++)
-                if (trapGlows[tile] != null && trapGlows[tile].gameObject.activeSelf)
-                    trapGlows[tile].color = new Color(Danger.r, Danger.g, Danger.b, pulse);
             foreach (WarriorView w in warriors)
             {
                 if (w.Speech == null) continue;
